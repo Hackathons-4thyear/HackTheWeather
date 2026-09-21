@@ -82,8 +82,11 @@ verdict.
 
 **On screen:** the SMS preview, both languages side by side.
 
-> "The farmer doesn't open a dashboard. They get this — under 160 characters,
-> one SMS, English and Kiswahili."
+> "The farmer doesn't open a dashboard during planting season. They get this —
+> under 160 characters, one SMS, English and Kiswahili.
+>
+> The dashboard is for the extension officer or the agrovet advising them —
+> one person serving hundreds of farms."
 
 **Read the Kiswahili line aloud if you can pronounce it.** If not:
 

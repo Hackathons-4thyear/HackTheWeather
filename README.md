@@ -189,6 +189,26 @@ Open-Meteo forecast    ─┘    + spray-window rules     reasons
                               gated
 ```
 
+### Who it is for
+
+**Two different users, two different products.**
+
+**The farmer's product is the SMS.** A smallholder does not open a dashboard
+during planting season. They get one message, under 160 characters, in English
+or Kiswahili, on any phone — and only when the risk has actually changed.
+
+**The dashboard is for the people who advise many farmers**: county extension
+officers, agrovet and agro-dealer staff, and cooperative field teams. They need
+the reasoning, the forecast, the spray windows and the evidence trail so they
+can answer *why* — and one of them serves hundreds of farms, which is what
+makes a single weather station worth building on.
+
+**Who would pay.** The realistic routes are county extension services, farmer
+cooperatives, and input suppliers bundling alerts with what they already sell.
+We have not negotiated with any of them and quote no prices. What we can say is
+that the send policy makes the unit economics plausible at all: **15 messages
+per farmer per season, not one every morning.**
+
 ### Data → Insight → Action → Impact
 
 **Data.** Every 15 minutes the Conduit station records temperature, humidity,
@@ -369,6 +389,11 @@ strains and local cultivars may shift the thresholds. **Local calibration
 against observed blight outbreaks in Kiambu is the single most important next
 step** — until then, the thresholds are borrowed, not validated here.
 
+We use Hutton anyway because it is the established operational standard and it
+is *transparent*: every threshold is one line in `config.py`, so a local
+agronomist can disagree with a number and change it, which is not true of a
+model fitted to data we do not have.
+
 **Backtest spray windows use perfect foresight.** No archive exists of what the
 forecast *said* on a past day, only what the weather *did*. So spray windows in
 the backtest are computed from subsequent observed weather and are labelled
@@ -378,6 +403,17 @@ observations only, exactly as they would live.
 
 **No field validation.** The engine has never been checked against an observed
 outbreak. The KMD advisory corroborates the weather, not the disease.
+
+What the backtest *does* establish is narrower: on 92 days of real station data
+the engine fired on a defensible, reproducible schedule — 10 HIGH days, not 92
+and not zero — without lookahead, which is enforced in code and asserted by
+tests. That demonstrates the engine behaves correctly. It does not demonstrate
+that blight occurred.
+
+**No farmer interviews.** Every decision about the farmer experience — the
+160-character limit, Kiswahili, Swahili time, sending only on escalation — is
+reasoned from constraints rather than tested with users. Sitting with ten
+farmers in Juja is the first thing we would do with more time.
 
 **The Kiswahili is unreviewed.** Written by a non-native speaker. The dashboard
 badges it as such, a test keeps the flag false until someone signs off, and
@@ -392,24 +428,34 @@ attention.
 
 ## What's next
 
-1. **Calibrate against observed outbreaks in Kiambu.** Pair extension-officer
-   or farmer-reported blight records with our risk history and tune the
-   thresholds to local conditions. Everything else is secondary to this.
-2. **Native Kiswahili review**, then flip `SW_TRANSLATION_REVIEWED`.
-3. **More stations.** One point cannot represent a county. Additional Conduit
-   nodes, or blending with satellite humidity, would let risk be interpolated
-   across a farming area.
-4. **Satellite calibration.** Extend the ERA5 comparison into a continuous check
-   that flags station drift automatically.
-5. **A soil-water model.** Rainfall plus evapotranspiration would add irrigation
-   timing and waterlogging warnings — without ever pretending we measured soil
-   moisture.
-6. **USSD.** SMS reaches any phone, but USSD would let a farmer *ask* rather
-   than wait, and works without smartphone data.
-7. **Swap the rule engine for a learned model.** `disease_engine.assess()` is
-   the documented swap point: same input frame, same `RiskAssessment` out. With
-   enough labelled outbreaks, a model could replace the rules without touching
-   any caller.
+1. **Farmer pilot with a county extension office.** Put the SMS in front of
+   real smallholders through the people who already advise them, and watch what
+   they do with it. Everything about the farmer experience is currently
+   reasoned rather than tested.
+2. **Calibrate against observed outbreaks in Kiambu.** Pair extension-officer
+   or farmer-reported blight records with our risk history and tune the Hutton
+   thresholds to local conditions, strains and cultivars.
+3. **CHIRPS / GPM satellite rainfall in the live pipeline.** Today satellite
+   data appears only as an offline ERA5 sanity check. Bringing gridded rainfall
+   into the running system would fill station gaps, flag sensor drift
+   automatically, and extend coverage beyond the single point we can currently
+   speak for.
+4. **Multi-station coverage.** One point cannot represent a county when a storm
+   soaks one field and misses the next. More Conduit nodes, blended with
+   satellite humidity, would let risk be interpolated across a farming area.
+5. **An ML model trained on observed blight outbreaks.**
+   `disease_engine.assess()` is a documented swap point — same input frame,
+   same `RiskAssessment` out — so a learned model can replace the rules without
+   touching a single caller. This needs labels first, which is why it follows
+   calibration rather than leading.
+6. **Native Kiswahili review**, then flip `SW_TRANSLATION_REVIEWED`. The
+   specific open questions are already written down in
+   [`services/messages.py`](services/messages.py).
+7. **USSD.** SMS reaches any phone, but USSD would let a farmer *ask* rather
+   than wait, with no smartphone and no data bundle.
+8. **A soil-water model.** Rainfall plus evapotranspiration would add
+   irrigation timing and waterlogging warnings — without ever pretending we
+   measured soil moisture, because the station has no soil sensor.
 
 ---
 

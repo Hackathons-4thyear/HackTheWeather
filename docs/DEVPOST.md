@@ -58,8 +58,19 @@ The output is an SMS under 160 characters, in **English and Kiswahili**:
 The Kiswahili uses **Swahili time** — *saa 3 asubuhi* for 09:00 — because
 that is how the time is actually spoken.
 
-A Streamlit dashboard shows current risk, ranked spray windows, the 7-day
-outlook, the SMS preview, and the full backtest.
+**Two users, two products.** The farmer's product is the SMS — a smallholder
+does not open a dashboard during planting season. The Streamlit dashboard is
+for the people who advise many farmers: county extension officers, agrovet
+staff and cooperative field teams, who need the reasoning, the forecast, the
+spray windows and the evidence trail so they can answer *why*. One of them
+serves hundreds of farms, which is what makes a single weather station worth
+building on.
+
+Who would pay: county extension services, farmer cooperatives, or input
+suppliers bundling alerts with what they already sell. We have not negotiated
+with any of them and quote no prices — but the send policy is what makes the
+unit economics plausible at all, at 15 messages per farmer per season rather
+than one every morning.
 
 ---
 
@@ -209,13 +220,18 @@ else is secondary.
 
 **Native Kiswahili review.** The questions are already written down.
 
-**More stations.** One point cannot represent a county; convective rain soaks
-one field and misses the next. More Conduit nodes, or blending with satellite
-humidity, would let risk be interpolated across a farming area.
+**A farmer pilot with a county extension office.** Put the SMS in front of real
+smallholders through the people who already advise them. Everything about the
+farmer experience is currently reasoned from constraints rather than tested.
 
-**Continuous satellite cross-checking.** Extend our ERA5 comparison into a
-standing check that flags station drift automatically — it already caught a
-faulty gauge once.
+**CHIRPS / GPM satellite rainfall in the live pipeline.** Today satellite data
+appears only as an offline ERA5 sanity check. Bringing gridded rainfall into
+the running system would fill station gaps, flag sensor drift automatically,
+and extend coverage beyond the single point we can currently speak for.
+
+**More stations.** One point cannot represent a county; convective rain soaks
+one field and misses the next. More Conduit nodes, blended with satellite
+humidity, would let risk be interpolated across a farming area.
 
 **A soil-water model.** Rainfall plus evapotranspiration would add irrigation
 timing and waterlogging warnings. Without ever pretending we measured soil
