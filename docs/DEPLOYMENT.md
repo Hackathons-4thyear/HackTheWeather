@@ -2,6 +2,25 @@
 
 Written for whoever is doing the clicking. Takes about 10 minutes.
 
+**Live app: https://shamba-pulse-jkuat.streamlit.app/**
+
+## What actually worked (read this first)
+
+Our first deploy hung on *"Your app is in the oven"* for over an hour. What
+fixed it:
+
+1. **Delete the stuck app.** A wedged build does not reliably recover in place;
+   Reboot was not enough. Remove it from share.streamlit.io and start again.
+2. **Set Python 3.12 in Advanced settings _before_ clicking Deploy.** This is
+   the single most important step. `numpy==2.5.3` requires Python >= 3.12, so
+   anything lower makes the dependency set unsatisfiable.
+3. **Ignore `runtime.txt`.** Community Cloud does not read it - we removed ours.
+   The Advanced-settings dropdown is the only place the version is set.
+4. **Set the app to Public.** A new app can default to private, which redirects
+   visitors to a login page (HTTP 303 to `share.streamlit.io/-/auth/app`).
+   Judges cannot open a private app. Settings -> Sharing -> **"This app is
+   public and searchable"**.
+
 **The short version:** push to GitHub, point share.streamlit.io at `app.py`,
 paste two secrets. The app works even if you skip the secrets — it falls back
 to the 476 days of real station data committed in this repo.
@@ -30,7 +49,7 @@ Files already in the repo that make this work — nothing to create:
 ## Step 1 — Push to GitHub
 
 ```bash
-git remote add origin https://github.com/<you>/shamba-pulse.git
+git remote add origin https://github.com/Hackathons-4thyear/HackTheWeather.git
 git push -u origin main
 ```
 
@@ -52,7 +71,8 @@ The repo can be **public or private** — Community Cloud handles both.
 2. Click **"Create app"** (top right).
 3. Choose **"Deploy a public app from GitHub"**.
 4. Fill in:
-   - **Repository:** `<you>/shamba-pulse`
+   - **Repository:** `Hackathons-4thyear/HackTheWeather`
+     *(or your fork, if you deployed from one - see "Deploying from a fork" below)*
    - **Branch:** `main`
    - **Main file path:** `app.py`
    - **App URL:** pick your subdomain, e.g. `shamba-pulse`
@@ -176,6 +196,40 @@ clears on reboot.
 Community Cloud allows 1 GB RAM. The backtest over the full history is the
 heaviest step. Reboot from the ⋮ menu; if it recurs, limit the backtest with
 `bt.run_backtest(hist, start=..., end=...)` to the OND 2025 season only.
+
+---
+
+## Deploying from a fork
+
+If the app is deployed from **your fork** rather than from
+`Hackathons-4thyear/HackTheWeather`, Streamlit watches the fork, not the org
+repo. Pushes to the org repo will **not** reach the live app on their own.
+
+After anything is pushed to the org repo:
+
+1. Open your fork on GitHub.
+2. Click **"Sync fork"** -> **"Update branch"**.
+3. Streamlit redeploys within a minute or two.
+
+If the app is deployed straight from the org repo, ignore this section - pushes
+go live automatically.
+
+---
+
+## Making sure judges can actually open it
+
+Check it in a **private/incognito window**, signed out of Streamlit and GitHub.
+
+- Page loads -> public, judges are fine.
+- Redirected to a sign-in page -> the app is **private**. Fix it in
+  Settings -> **Sharing** -> "This app is public and searchable".
+
+From a terminal, a public app answers `200`; a private one answers `303` with a
+`location:` header pointing at `share.streamlit.io/-/auth/app`:
+
+```bash
+curl -s -D - -o /dev/null https://shamba-pulse-jkuat.streamlit.app/
+```
 
 ---
 

@@ -276,15 +276,14 @@ pytest
 
 ## Try it out — links
 
-- **Live app:** `https://<your-subdomain>.streamlit.app`
-- **Source:** `https://github.com/<you>/shamba-pulse`
+- **Live app:** https://shamba-pulse-jkuat.streamlit.app/
+- **Source:** https://github.com/Hackathons-4thyear/HackTheWeather
 - **Data quality report:** `docs/DATA_QUALITY.md` in the repo
 
 ---
 
 ## Notes before you submit
 
-- [ ] Replace both `<...>` placeholders above with real URLs.
 - [ ] Re-read *Inspiration* and make it sound like your team.
 - [ ] Confirm the live app is awake — Community Cloud sleeps after ~7 days.
 - [ ] Decide whether to send `docs/note_to_organizers_gauge2.md` to JHUB. If

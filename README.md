@@ -6,6 +6,10 @@ station.**
 
 Hack The Weather 2026 · JHUB Africa / JKUAT
 
+[![Open the live app](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://shamba-pulse-jkuat.streamlit.app/)
+
+**▶ [Open the live app](https://shamba-pulse-jkuat.streamlit.app/)** · **[Source on GitHub](https://github.com/Hackathons-4thyear/HackTheWeather)**
+
 ---
 
 ## In 30 seconds
@@ -113,8 +117,8 @@ days, 61 messages.)
 **Requires Python 3.11+** (developed on 3.13).
 
 ```bash
-git clone <repo-url>
-cd shamba-pulse
+git clone https://github.com/Hackathons-4thyear/HackTheWeather.git
+cd HackTheWeather
 
 python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt   # Windows
