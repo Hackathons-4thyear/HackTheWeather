@@ -101,7 +101,12 @@ than anything else we built:
   invisibly.
 
 We cross-checked our rainfall reconstruction against ERA5 reanalysis for the
-same coordinates: **301.8 mm vs 268.6 mm — within 12%** over 92 days.
+same coordinates: **301.8 mm vs 268.6 mm — within 12%** over 92 days. The
+dashboard shows this as a **"Cross-check against ERA5 reanalysis"** panel with
+the daily comparison, the season totals and the rainy-day agreement. ERA5 is a **reanalysis** — a model reconstruction that assimilates satellite and ground observations onto a ~9 km grid, **not a direct satellite measurement**. The station is a single point inside one of those cells and
+rainfall here is convective, which is why the day-to-day correlation is weak
+while the **seasonal agreement is the meaningful result**. No station value is
+adjusted toward ERA5.
 
 **282 tests**, concentrated on the boundaries that decide whether a farmer gets
 warned: exactly 6 humid hours, exactly 10.0 °C, exactly 90.0% humidity,

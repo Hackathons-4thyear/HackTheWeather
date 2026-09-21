@@ -45,6 +45,11 @@ farmer would receive in both languages.*
 are messages that would have been sent, and the shaded band is the KMD
 heavy-rainfall advisory.*
 
+![Station rainfall cross-checked against ERA5 reanalysis](docs/img/04-era5-crosscheck.png)
+
+*Our reconstructed rainfall against ERA5 for the same season. Seasonal totals
+agree to within 12%; the weak day-to-day correlation is expected, not a defect.*
+
 ---
 
 ## It works on real data
@@ -296,6 +301,14 @@ Cross-checked against ERA5 reanalysis for the same coordinates: **301.8 mm vs
 against a ~9 km grid cell in convective rainfall, not a defect. It is a
 credibility check, **not** calibration — no station value is adjusted toward
 ERA5.
+
+The dashboard carries this as a **"Cross-check against ERA5 reanalysis"**
+panel in the *Does it work?* tab: the daily comparison, the season totals
+and the rainy-day agreement, with the same caveat stated in full. ERA5 is a **reanalysis** — a model reconstruction that assimilates satellite and ground observations onto a ~9 km grid, **not a direct satellite measurement**.
+The station is a single point inside one of those cells and rainfall here
+is convective, which is why the day-to-day correlation is weak while the
+**seasonal agreement is the meaningful result**. No station value is
+adjusted toward ERA5.
 
 **Full evidence and reproduction commands: [docs/DATA_QUALITY.md](docs/DATA_QUALITY.md)**
 

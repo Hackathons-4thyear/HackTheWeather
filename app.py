@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import config  # noqa: E402
 from analysis import backtest as bt  # noqa: E402
+from analysis import validate_rain as vr  # noqa: E402
 from services import alerts as alerts_mod  # noqa: E402
 from services import data_processor as dp  # noqa: E402
 from services import data_source as ds  # noqa: E402
@@ -79,6 +80,16 @@ def get_observations(days: int) -> ds.DataStatus:
 @st.cache_data(ttl=900, show_spinner="Fetching the 7-day forecast...")
 def get_forecast() -> fc.ForecastResult:
     return fc.fetch_forecast()
+
+
+@st.cache_data(ttl=3600, show_spinner="Loading the ERA5 cross-check...")
+def get_rain_validation() -> vr.ValidationData:
+    """Cached station-vs-ERA5 comparison.
+
+    Reads the committed CSV; only rebuilds (and only then touches the network)
+    if that file is missing.
+    """
+    return vr.load_comparison()
 
 
 @st.cache_data(ttl=3600, show_spinner="Replaying the history...")
@@ -531,6 +542,83 @@ def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
                 st.caption(r["reason"])
 
 
+def render_era5_check(data: vr.ValidationData) -> None:
+    """Station rainfall against ERA5 reanalysis for the canonical window."""
+    st.subheader("Cross-check against ERA5 reanalysis")
+
+    if not data.ok:
+        st.info(
+            f"The ERA5 comparison is not available right now "
+            f"({data.error}). It is a credibility check on our rainfall "
+            f"reconstruction, not an input to any decision, so nothing else "
+            f"on this page depends on it.",
+            icon="🛰️",
+        )
+        return
+
+    df = data.df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    stats = vr.summarise_comparison(df)
+
+    st.write(
+        "Our rainfall is **reconstructed** by differencing the station's "
+        "running daily total, because the per-interval field records only ~6% "
+        "of what actually falls. A reconstruction deserves an independent "
+        "check, so we compare it against ERA5."
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Station total", f"{stats['station_total']:.1f} mm",
+              help="Our reconstruction, summed over the season.")
+    c2.metric("ERA5 total", f"{stats['era5_total']:.1f} mm",
+              help="ERA5 reanalysis for the same coordinates.")
+    c3.metric("Ratio", f"{stats['ratio']:.2f}",
+              help="Station divided by ERA5. 1.00 would be exact agreement.")
+    c4.metric("Rainy-day agreement", f"{stats['agree_pct']:.0f}%",
+              help=f"Days where both or neither exceeded "
+                   f"{vr.WET_DAY_MM:.0f} mm.")
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=df["date"], y=df["station_mm"], name="Station (reconstructed)",
+        marker_color="#0277bd",
+        hovertemplate="%{x|%d %b}<br>Station %{y:.1f} mm<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=df["date"], y=df["era5_mm"], name="ERA5 reanalysis",
+        marker_color="#f9a825",
+        hovertemplate="%{x|%d %b}<br>ERA5 %{y:.1f} mm<extra></extra>",
+    ))
+    fig.update_layout(
+        height=330, barmode="group", bargap=0.15, bargroupgap=0.05,
+        margin=dict(l=10, r=10, t=30, b=10), hovermode="x unified",
+        plot_bgcolor="#fbfcfd",
+        legend=dict(orientation="h", y=1.15),
+        yaxis_title="mm/day",
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    st.markdown(
+        f"**ERA5 is a reanalysis** - a model reconstruction that assimilates "
+        f"satellite and ground observations onto a **~9 km grid** - "
+        f"**not a direct satellite measurement**. The station is a single "
+        f"point inside one of those cells, and rainfall here is convective, so "
+        f"a storm can soak one field and miss the next: that is why the "
+        f"day-to-day correlation is weak "
+        f"(Spearman {stats['spearman']:.2f}) while the **seasonal totals agree "
+        f"to within {abs(stats['ratio'] - 1) * 100:.0f}%**, which is the "
+        f"meaningful result. A reconstruction that double-counted or missed "
+        f"the daily counter resets would not land this close to an independent "
+        f"record over {stats['days']} days."
+    )
+    st.caption(
+        f"This is a credibility check, **not calibration** - no station value "
+        f"is adjusted toward ERA5, and nothing here feeds the risk engine. "
+        f"Source: ERA5 via the Open-Meteo archive, {data.note}. "
+        f"Reproduce with `analysis/validate_rain.py`."
+    )
+
+
 # --------------------------------------------------------------------------
 # Main
 # --------------------------------------------------------------------------
@@ -607,6 +695,8 @@ def main() -> None:
         )
         scope = "season" if scope_label.startswith(config.BACKTEST_WINDOW["label"]) else "all"
         render_backtest(get_backtest(bt.DEFAULT_ALERT_HOUR, scope), scope)
+        st.divider()
+        render_era5_check(get_rain_validation())
 
     st.divider()
     st.caption(
