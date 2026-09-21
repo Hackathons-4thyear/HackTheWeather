@@ -328,7 +328,7 @@ def render_forecast_chart(df: pd.DataFrame) -> None:
     )
     fig.update_xaxes(showgrid=True, gridcolor="#eceff1")
     fig.update_yaxes(showgrid=True, gridcolor="#eceff1")
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
 
 
 def render_outlook_table(df: pd.DataFrame) -> None:
@@ -343,7 +343,7 @@ def render_outlook_table(df: pd.DataFrame) -> None:
         "Humid hrs": daily.get("humid_hours", 0),
         "Wet hrs": daily.get("wet_hours", 0),
     })
-    st.dataframe(show, hide_index=True, use_container_width=True)
+    st.dataframe(show, hide_index=True, width='stretch')
     st.caption(
         f"'Humid hrs' counts hours at or above {config.HUTTON_RH_THRESHOLD_PCT:.0f}% "
         f"humidity - six of them in a day, with a minimum above "
@@ -459,7 +459,7 @@ def render_backtest(results: pd.DataFrame) -> None:
         showlegend=True, legend=dict(orientation="h", y=1.15),
         plot_bgcolor="#fbfcfd", bargap=0.05,
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
 
     st.markdown("**Messages that would have gone out**")
     if sent.empty:
@@ -535,7 +535,7 @@ def main() -> None:
             rf.update_layout(height=300, margin=dict(l=10, r=10, t=30, b=10),
                              hovermode="x unified", plot_bgcolor="#fbfcfd",
                              legend=dict(orientation="h", y=1.15))
-            st.plotly_chart(rf, use_container_width=True,
+            st.plotly_chart(rf, width='stretch',
                             config={"displayModeBar": False})
 
     with tab_test:

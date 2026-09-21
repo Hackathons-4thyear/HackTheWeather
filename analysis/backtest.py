@@ -68,11 +68,21 @@ def load_history(path: Path | None = None) -> tuple[pd.DataFrame, str]:
         else:
             df = pd.read_excel(cand)
 
-        if "timestamp" in df.columns and "humidity_pct" in df.columns:
-            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
-            canon = df
-        else:
-            canon = dp.to_canonical(df)   # raw export - map it
+        try:
+            if "timestamp" in df.columns and "humidity_pct" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+                canon = df.dropna(subset=["timestamp"])
+            else:
+                canon = dp.to_canonical(df)   # raw export - map it
+        except Exception:  # noqa: BLE001 - not a weather file; try the next
+            continue
+
+        # data/ also holds our own outputs (backtest results, the rain
+        # validation table). Those glob in ahead of conduit_history.csv
+        # alphabetically, so check this really is weather data before using it.
+        if canon.empty or dp.check_required(canon):
+            continue
+
         return canon, str(cand)
 
     return pd.DataFrame(), "(no data found)"
