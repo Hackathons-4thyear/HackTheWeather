@@ -68,11 +68,15 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
         "humidity_pct", "humidity", "rh", "relative_humidity", "hum",
         "humidity_percent", "rel_hum",
     ),
-    # Rain gauge 1 is the primary; rg2 is handled separately as a cross-check.
+    # Per-interval rainfall. On the real Conduit station rg1 UNDER-REPORTS
+    # badly (0.20 mm recorded against 6.20 mm actual over 11 days), so it is
+    # only a fallback - see CUMULATIVE_RAIN_ALIASES below for the field we
+    # actually derive rainfall from.
     "rain_mm": (
         "rain_mm", "rainfall", "rain", "precipitation", "precip",
         "rg1", "rain_gauge_1", "raingauge1", "rg_1", "rain1", "rg1_mm",
     ),
+    # Gauge 2 is recorded but NOT trusted - see RAIN_GAUGE_2_TRUSTED.
     "rain_mm_2": (
         "rg2", "rain_gauge_2", "raingauge2", "rg_2", "rain2", "rg2_mm",
     ),
@@ -98,6 +102,24 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "ir_raw": ("ir", "ir_raw", "si1145_ir", "infrared", "si1145ir"),
     "vis_raw": ("vis", "vis_raw", "visible", "si1145_vis", "light", "si1145vis"),
 }
+
+# Running daily rainfall totals. The station resets these at UTC midnight, so
+# rainfall per interval is the DIFFERENCE between consecutive readings, with a
+# drop back to zero meaning the counter reset rather than negative rain.
+#
+# Why this rather than the per-interval rg1 field: measured against the live
+# station over 2026-09-10..20, rg1 reported 0.20 mm while rg1tt accumulated
+# 6.20 mm across two coherent rain events. rg1 misses about 97% of rainfall,
+# which would leave the spray adviser believing it never rains.
+CUMULATIVE_RAIN_ALIASES: tuple[str, ...] = (
+    "rg1tt", "rg1_tt", "rain_total_today", "rain_today", "rg1_total",
+)
+
+# Gauge 2's running total (rg2tt) is NOT usable: over the same 11 dry days it
+# reconstructed to 297 mm and reset 207 times, where a working gauge resets
+# once a day. So gauge 2 is never used to fill gaps in gauge 1 - a broken
+# sensor is worse than a missing one, because it looks like data.
+RAIN_GAUGE_2_TRUSTED = False
 
 # Physically plausible bounds. Readings outside these are sensor faults, not
 # weather, and are set to NaN rather than silently skewing a daily minimum.
@@ -281,22 +303,68 @@ def to_canonical(
                 bad = (out[col] < lo) | (out[col] > hi)
                 out.loc[bad, col] = np.nan
 
-    # If the second rain gauge exists, use it to fill gaps in the primary.
-    if "rain_mm_2" in out.columns:
-        if "rain_mm" in out.columns:
-            out["rain_mm"] = out["rain_mm"].fillna(out["rain_mm_2"])
-        else:
-            out["rain_mm"] = out["rain_mm_2"]
-        out = out.drop(columns=["rain_mm_2"])
-
     out = (
         out.sort_values("timestamp")
         .drop_duplicates(subset="timestamp", keep="last")
         .reset_index(drop=True)
     )
 
+    # Prefer rainfall derived from the running daily total. Must happen AFTER
+    # sorting, since it differences consecutive readings.
+    cumulative_col = None
+    norm_to_raw = {_normalise(c): c for c in df.columns}
+    for alias in CUMULATIVE_RAIN_ALIASES:
+        hit = norm_to_raw.get(_normalise(alias))
+        if hit is not None:
+            cumulative_col = hit
+            break
+
+    if cumulative_col is not None:
+        aligned = (
+            df[[cumulative_col]]
+            .assign(_ts=parse_timestamps(df[mapping["timestamp"]]))
+            .dropna(subset=["_ts"])
+            .sort_values("_ts")
+            .drop_duplicates(subset="_ts", keep="last")
+            .set_index("_ts")[cumulative_col]
+        )
+        derived = rainfall_from_cumulative(aligned)
+        out["rain_mm"] = out["timestamp"].map(derived).astype(float)
+        out["rain_mm"] = out["rain_mm"].fillna(0.0)
+
+    # Gauge 2 is never used to fill gaps in gauge 1 - see RAIN_GAUGE_2_TRUSTED.
+    if "rain_mm_2" in out.columns:
+        if "rain_mm" not in out.columns and RAIN_GAUGE_2_TRUSTED:
+            out["rain_mm"] = out["rain_mm_2"]
+        out = out.drop(columns=["rain_mm_2"])
+
     ordered = [c for c in CANONICAL_COLUMNS if c in out.columns]
     return out[ordered]
+
+
+def rainfall_from_cumulative(totals: pd.Series) -> pd.Series:
+    """Per-interval rainfall from a running daily total.
+
+    The counter climbs through the day and resets to zero (at UTC midnight on
+    the Conduit station). A negative step therefore means "reset", and the new
+    value is itself the rain accumulated since that reset - not negative rain.
+
+    Expects `totals` already sorted by time.
+    """
+    totals = pd.to_numeric(totals, errors="coerce")
+    step = totals.diff()
+
+    # On a reset the reading itself is the accumulation since the reset.
+    increment = step.where(step >= 0, totals)
+
+    # Where there is no usable step - the very first reading, or either side of
+    # a gap in the record - report no rain rather than inventing it. Without
+    # this the first reading's whole running total is booked as rain in that
+    # one interval. It costs us any rain that fell during a gap, which is the
+    # right direction to err: under-report rather than fabricate.
+    increment = increment.mask(step.isna(), 0.0)
+
+    return increment.fillna(0.0).clip(lower=0.0)
 
 
 def check_required(df: pd.DataFrame) -> list[str]:
