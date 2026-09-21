@@ -226,6 +226,12 @@ RISK_LEVELS = ("LOW", "MODERATE", "HIGH")
 # timeline as CONTEXT: it corroborates that the weather was genuinely unusual
 # in that window. It is NOT evidence that blight occurred - nobody surveyed the
 # fields - and must never be presented as validation of the disease model.
+# The canonical backtest window quoted in the README, Devpost and demo script:
+# the calendar short-rains season, exactly October-December 2025. We do NOT
+# extend it into January to capture the tail of the final HIGH episode - moving
+# a boundary to improve a result is how numbers stop being trustworthy.
+BACKTEST_WINDOW = {"start": "2025-10-01", "end": "2025-12-31", "label": "OND 2025"}
+
 KMD_ADVISORY = {
     "start": "2025-10-23",
     "end": "2025-10-30",

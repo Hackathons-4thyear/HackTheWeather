@@ -82,10 +82,18 @@ def get_forecast() -> fc.ForecastResult:
 
 
 @st.cache_data(ttl=3600, show_spinner="Replaying the history...")
-def get_backtest(alert_hour: int) -> pd.DataFrame:
+def get_backtest(alert_hour: int, scope: str) -> pd.DataFrame:
+    """Replay history. `scope` is "season" (the canonical OND 2025 window the
+    README quotes) or "all" (the full station archive)."""
     hist, _ = bt.load_history()
     if hist.empty:
         return pd.DataFrame()
+    if scope == "season":
+        return bt.run_backtest(
+            hist, alert_hour=alert_hour, with_spray=False,
+            start=pd.Timestamp(config.BACKTEST_WINDOW["start"]),
+            end=pd.Timestamp(config.BACKTEST_WINDOW["end"]),
+        )
     return bt.run_backtest(hist, alert_hour=alert_hour, with_spray=False)
 
 
@@ -396,13 +404,28 @@ def render_sms_preview(alert: alerts_mod.Alert,
 LEVEL_ORDER = {"LOW": 0, "MODERATE": 1, "HIGH": 2, de.UNKNOWN: -1}
 
 
-def render_backtest(results: pd.DataFrame) -> None:
+def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
     st.subheader("Would it have worked?")
     st.write(
         "Replaying the real station history one morning at a time. At each "
         "point the engine sees only what had happened by then - no peeking "
         "ahead."
     )
+    if scope == "season":
+        st.caption(
+            f"Showing the **{config.BACKTEST_WINDOW['label']} short rains** "
+            f"({config.BACKTEST_WINDOW['start']} to "
+            f"{config.BACKTEST_WINDOW['end']}) - the window quoted in the "
+            f"README. Reproduce with `analysis/backtest.py --from "
+            f"{config.BACKTEST_WINDOW['start']} --to "
+            f"{config.BACKTEST_WINDOW['end']}`."
+        )
+    else:
+        st.caption(
+            "Showing the **full station archive**. These numbers are larger "
+            "than the OND 2025 figures quoted in the README, which cover the "
+            "short-rains season only."
+        )
 
     if results.empty:
         st.info(
@@ -564,7 +587,16 @@ def main() -> None:
                             config={"displayModeBar": False})
 
     with tab_test:
-        render_backtest(get_backtest(bt.DEFAULT_ALERT_HOUR))
+        scope_label = st.radio(
+            "Period to replay",
+            [f"{config.BACKTEST_WINDOW['label']} short rains (1 Oct - 31 Dec 2025)",
+             "Full station archive (Jun 2025 - Sep 2026)"],
+            index=0, horizontal=True,
+            help="The season view is the window quoted in the README. The full "
+                 "archive covers every day the station has recorded.",
+        )
+        scope = "season" if scope_label.startswith(config.BACKTEST_WINDOW["label"]) else "all"
+        render_backtest(get_backtest(bt.DEFAULT_ALERT_HOUR, scope), scope)
 
     st.divider()
     st.caption(

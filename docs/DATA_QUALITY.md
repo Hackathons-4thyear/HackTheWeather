@@ -9,8 +9,9 @@ Every number here is measured, not assumed. Reproduce them with:
 .venv/Scripts/python.exe analysis/validate_rain.py
 ```
 
-**Period examined:** 2025-10-01 → 2026-01-01 (the OND 2025 short rains),
-8,737 readings, plus a September 2026 sample for the live-API checks.
+**Period examined:** 2025-10-01 → 2025-12-31 (the OND 2025 short rains, the
+calendar season exactly), 8,737 readings, plus a September 2026 sample for the
+live-API checks. The full station archive runs 2025-06-01 → 2026-09-21.
 
 ---
 

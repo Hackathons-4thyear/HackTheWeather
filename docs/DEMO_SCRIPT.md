@@ -101,7 +101,7 @@ verdict.
 > through the engine — ninety-two days of actual station data, one morning at a
 > time, with the engine only seeing what had happened by then.
 >
-> Eleven days at HIGH risk. The longest Hutton run: five days straight."
+> Ten days at HIGH risk. The longest Hutton run: five days straight."
 
 **Point at the shaded band.**
 
@@ -162,8 +162,9 @@ first from being an overclaim.
 | Station data | 476 days, 46,183 readings, 15-min cadence |
 | Backtest period | OND 2025, 92 days, 8,737 readings |
 | Coverage | 98.6–99.1%/month, no gap over 6 hours |
-| HIGH days | 11 |
+| HIGH days | 10 |
 | Longest Hutton run | 5 days |
-| SMS sent / eligible | 15 / 47 (68% fewer) |
+| Days inside a Hutton run | 21 |
+| SMS sent / eligible | 15 / 46 (67% fewer) |
 | Rainfall vs ERA5 | 301.8 mm vs 268.6 mm (within 12%) |
 | Tests | 282 |

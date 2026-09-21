@@ -18,17 +18,22 @@ No lookahead, no hand-picked demo day.
 
 | Result | |
 |---|---|
-| Days at **HIGH** blight risk | **11** |
+| Days at **HIGH** blight risk | **10** |
 | Longest Hutton run | **5 consecutive days** |
-| Days inside a Hutton run | 22 |
+| Days inside a Hutton run | 21 |
 | SMS actually sent under the send policy | **15** |
-| SMS if we texted every eligible day | 47 |
+| SMS if we texted every eligible day | 46 |
 | Days we refused to judge (data gaps) | 0 |
 
 The season's main event:
 
 > **29 October – 1 November 2025** — four straight days at HIGH risk, on a
 > five-day Hutton run.
+
+The window is the calendar season, exactly October–December. The final HIGH
+episode begins 30 December and **continued into January 2026**; only its two
+December days are counted here, because extending the window to capture the
+rest of an episode would be choosing the boundary to suit the result.
 
 ### Independent corroboration
 
@@ -47,11 +52,15 @@ thing we could do next.
 
 [kmd]: https://allafrica.com/stories/202510230054.html
 
-Reproduce it:
+Reproduce it exactly:
 
 ```bash
-.venv/Scripts/python.exe analysis/backtest.py
+.venv/Scripts/python.exe analysis/backtest.py --from 2025-10-01 --to 2025-12-31
 ```
+
+(Running `analysis/backtest.py` with no arguments replays the **full 476-day**
+history instead, which is a different and larger result: 475 days, 79 HIGH
+days, 61 messages.)
 
 ---
 
@@ -120,7 +129,7 @@ telling them the risk and when to spray. Not a weather report — a decision.
 Over the 92 days of OND 2025, a **weekly fixed spray schedule** is about
 **13 applications**.
 
-Our backtest found **11 HIGH-risk days**, clustered into **six episodes**, two
+Our backtest found **10 HIGH-risk days**, clustered into **six episodes**, two
 of which ran for multiple days:
 
 | Episode | Days |
@@ -130,7 +139,7 @@ of which ran for multiple days:
 | 15 Nov | 1 |
 | 15 Dec | 1 |
 | 24 Dec | 1 |
-| 30 Dec – 1 Jan | 3 |
+| 30 Dec – 31 Dec | 2 (continued into January 2026) |
 
 Spraying in response to those episodes — **one application per episode, six in
 total** — targets protection at the periods when the criteria say infection
@@ -149,7 +158,7 @@ conditions were actually met.
   the claim a field trial would have to establish, and we have not.**
 
 What the backtest *does* establish is narrower and solid: on 92 days of real
-station data, the engine identified 11 high-risk days and would have sent 15
+station data, the engine identified 10 high-risk days and would have sent 15
 messages — not 92, and not zero.
 
 ---
@@ -243,7 +252,7 @@ farmer's attention:
 - **MODERATE** — only on escalation from LOW/UNKNOWN, never while it persists.
 - **Cooldown** — 3 days between texts at the same level.
 
-On real OND 2025 data this cut **47 eligible days to 15 texts (68% fewer)**
+On real OND 2025 data this cut **46 eligible days to 15 texts (67% fewer)**
 without hiding anything.
 
 ---

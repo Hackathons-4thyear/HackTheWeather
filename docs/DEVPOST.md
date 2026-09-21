@@ -140,9 +140,9 @@ nothing on the day it matters.
 October–December 2025 short rains one morning at a time, with the engine seeing
 only what had happened by that point — no lookahead:
 
-- **11 days at HIGH risk** across 92 days
+- **10 days at HIGH risk** across 92 days (1 October – 31 December)
 - **Longest Hutton run: 5 consecutive days**
-- **15 SMS sent** under our send policy, against 47 eligible days
+- **15 SMS sent** under our send policy, against 46 eligible days
 - **Zero days** we had to refuse to judge
 
 The season's main event — **29 October to 1 November 2025**, four straight days
@@ -159,7 +159,7 @@ it.
 confident, wrong advice**, and documented them with reproducible numbers rather
 than quietly working around them.
 
-**The alert policy cut texts by 68%** without hiding anything — the dashboard
+**The alert policy cut texts by 67%** without hiding anything — the dashboard
 still shows every day's level.
 
 **HIGH means one thing.** Our first design let a secondary measure produce HIGH
