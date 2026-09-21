@@ -35,14 +35,14 @@ Hack The Weather 2026 · JHUB Africa / JKUAT
 
 ---
 
-![Hero with the risk ring, and the action card beneath it](docs/img/01-risk-card.png)
+![Hero with the risk ring, and the action card beneath it](docs/img/01-risk-card.png.png)
 
 *The verdict first: a risk ring that states the level in words as well as
 colour, one imperative sentence naming the actual spray window, and the reasons
 behind it. The "lagging" pill is the app reporting that the station's newest
 reading is hours old rather than calling stale data "live".*
 
-![Spray daylight timeline and the SMS as it reaches a phone](docs/img/02-spray-and-sms.png)
+![Spray daylight timeline and the SMS as it reaches a phone](docs/img/02-spray-and-sms.png.png)
 
 *Spray windows drawn across each day's daylight hours, with a plain sentence
 saying what was ruled out and why &mdash; then the exact SMS a farmer receives,
