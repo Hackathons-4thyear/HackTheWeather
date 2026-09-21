@@ -1,20 +1,12 @@
 # Committed so local and Streamlit Cloud render identically.
+# Palette: "modern field notebook" agritech identity - see ui/styles.css.
 
 [theme]
 base = "light"
-
-# Deep agricultural green. Used for primary actions and accents, never for
-# risk levels - those have their own palette in config.RISK_COLORS.
-primaryColor = "#2f6b3f"
-
-# Warm off-white rather than pure white: easier on the eye outdoors and on a
-# cheap phone screen in daylight.
-backgroundColor = "#faf8f4"
-secondaryBackgroundColor = "#f0ece3"
-
-# Near-black with a warm cast. Full #000 on off-white vibrates; this does not.
-textColor = "#1f2420"
-
+primaryColor = "#2E7D4F"            # leaf green
+backgroundColor = "#FAF7F0"         # paper off-white
+secondaryBackgroundColor = "#F2EDE3"
+textColor = "#1C2A24"               # ink
 font = "sans serif"
 
 [server]

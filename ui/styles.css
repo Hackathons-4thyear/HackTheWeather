@@ -1,0 +1,334 @@
+/* Shamba Pulse - "modern field notebook" agritech identity.
+   Loaded once by ui.components.load_css(). Presentation only. */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --forest:  #0F3D2E;
+  --leaf:    #2E7D4F;
+  --maize:   #F2B705;
+  --soil:    #7A4E2D;
+  --paper:   #FAF7F0;
+  --paper-2: #F2EDE3;
+  --ink:     #1C2A24;
+  --ink-mid: #4A574F;
+  --ink-soft:#6B7770;
+  --line:    #E4DCCD;
+  --card:    #FFFFFF;
+
+  --risk-high:    #B3261E;
+  --risk-moderate:#E8A317;
+  --risk-low:     #2E7D4F;
+  --risk-unknown: #5F6B73;
+
+  --r-lg: 20px;
+  --r-md: 16px;
+  --r-sm: 10px;
+  --shadow: 0 1px 2px rgba(28,42,36,.05), 0 6px 18px rgba(28,42,36,.07);
+  --shadow-sm: 0 1px 2px rgba(28,42,36,.06);
+  --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+}
+
+/* ---- hide Streamlit chrome so this reads as a product ------------------ */
+#MainMenu, footer, header[data-testid="stHeader"] {visibility: hidden; height: 0;}
+[data-testid="stToolbar"] {display: none !important;}
+[data-testid="stDecoration"] {display: none !important;}
+[data-testid="stStatusWidget"] {display: none !important;}
+
+/* ---- page -------------------------------------------------------------- */
+html, body, [data-testid="stAppViewContainer"] {background: var(--paper);}
+[data-testid="stAppViewContainer"] * {font-family: var(--sans);}
+.block-container {
+  padding-top: 1.1rem; padding-bottom: 0; max-width: 60rem;
+}
+h1, h2, h3, .serif {font-family: var(--serif) !important;}
+
+/* ---- hero -------------------------------------------------------------- */
+.sp-hero {
+  position: relative; overflow: hidden;
+  border-radius: var(--r-lg);
+  background: linear-gradient(135deg, #0F3D2E 0%, #165038 55%, #1E6244 100%);
+  color: #fff; padding: 1.6rem 1.7rem; margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+.sp-hero-bg {position: absolute; inset: 0; opacity: .13; pointer-events: none;}
+.sp-hero-inner {
+  position: relative; display: flex; gap: 1.4rem;
+  align-items: center; justify-content: space-between; flex-wrap: wrap;
+}
+.sp-hero-left {flex: 1 1 320px; min-width: 0;}
+.sp-title {
+  font-family: var(--serif); font-size: 2.55rem; font-weight: 700;
+  line-height: 1.02; letter-spacing: -1px; margin: 0 0 .35rem 0;
+}
+.sp-sub {
+  font-size: 1.0rem; line-height: 1.5; color: #D9E8DF;
+  margin: 0 0 .85rem 0; max-width: 34rem;
+}
+.sp-pills {display: flex; gap: .45rem; flex-wrap: wrap;}
+.sp-pill {
+  display: inline-flex; align-items: center; gap: .35rem;
+  background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.22);
+  color: #EAF3EE; border-radius: 999px; padding: .28rem .7rem;
+  font-size: .76rem; font-weight: 600; letter-spacing: .2px; white-space: nowrap;
+}
+.sp-pill-dot {width: 7px; height: 7px; border-radius: 50%; flex: none;}
+
+/* ---- risk ring --------------------------------------------------------- */
+.sp-ring-wrap {flex: 0 0 auto; display: flex; justify-content: center;
+               align-items: center; min-width: 190px;}
+.sp-ring-label {
+  font-family: var(--serif); font-weight: 700; letter-spacing: -.5px;
+}
+@keyframes sp-pulse {
+  0%   {opacity: .55; transform: scale(1);}
+  70%  {opacity: 0;   transform: scale(1.22);}
+  100% {opacity: 0;   transform: scale(1.22);}
+}
+.sp-pulse {transform-origin: center; animation: sp-pulse 2.4s ease-out infinite;}
+@media (prefers-reduced-motion: reduce) {
+  .sp-pulse {animation: none; opacity: .35;}
+}
+
+/* ---- generic card ------------------------------------------------------ */
+.sp-card {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-sm);
+  padding: 1.05rem 1.15rem; margin-bottom: .85rem;
+}
+
+/* ---- action card ------------------------------------------------------- */
+.sp-action {border-left: 6px solid var(--leaf);}
+.sp-action-head {
+  font-family: var(--serif); font-size: 1.42rem; font-weight: 600;
+  line-height: 1.28; color: var(--ink); margin-bottom: .2rem;
+}
+.sp-action-when {color: var(--leaf); font-weight: 700;}
+.sp-why-h {
+  font-size: .72rem; font-weight: 800; letter-spacing: 1.3px;
+  text-transform: uppercase; color: var(--ink-soft);
+  margin: .85rem 0 .5rem 0;
+}
+.sp-why-row {
+  display: flex; gap: .65rem; align-items: flex-start;
+  padding: .5rem 0; border-top: 1px solid var(--line);
+  font-size: .95rem; line-height: 1.5; color: var(--ink-mid);
+}
+.sp-why-ico {
+  flex: none; width: 26px; height: 26px; border-radius: 8px;
+  background: var(--paper-2); display: flex; align-items: center;
+  justify-content: center; margin-top: .05rem;
+}
+
+/* ---- metric tiles ------------------------------------------------------ */
+.sp-tiles {display: grid; gap: .7rem; grid-template-columns: repeat(4, 1fr);
+           margin-bottom: .9rem;}
+.sp-tile {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: .9rem .95rem; box-shadow: var(--shadow-sm);
+}
+.sp-tile-top {display: flex; align-items: center; gap: .4rem; margin-bottom: .45rem;}
+.sp-tile-label {
+  font-size: .68rem; font-weight: 800; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--ink-soft); line-height: 1.25;
+}
+.sp-tile-val {
+  font-family: var(--serif); font-size: 1.85rem; font-weight: 700;
+  color: var(--ink); line-height: 1.05; letter-spacing: -.7px;
+}
+.sp-tile-unit {font-family: var(--sans); font-size: .82rem; font-weight: 600;
+               color: var(--ink-soft); margin-left: .18rem;}
+.sp-tile-note {font-size: .74rem; color: var(--ink-soft); margin-top: .3rem;
+               line-height: 1.35;}
+
+/* ---- week strip -------------------------------------------------------- */
+.sp-week {display: grid; gap: .5rem; grid-template-columns: repeat(7, 1fr);
+          margin-bottom: .4rem;}
+.sp-day {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 14px; padding: .6rem .35rem; text-align: center;
+  box-shadow: var(--shadow-sm);
+}
+.sp-day-name {font-size: .68rem; font-weight: 800; letter-spacing: .6px;
+              text-transform: uppercase; color: var(--ink-soft);}
+.sp-day-date {font-size: .72rem; color: var(--ink-soft); margin-bottom: .4rem;}
+.sp-day-bar {height: 6px; border-radius: 999px; margin: .35rem .1rem;}
+.sp-day-val {font-size: .92rem; font-weight: 700; color: var(--ink);
+             font-family: var(--serif);}
+.sp-day-sub {font-size: .64rem; color: var(--ink-soft); line-height: 1.3;}
+
+/* ---- spray timeline ---------------------------------------------------- */
+.sp-tl-row {display: flex; align-items: center; gap: .7rem; margin-bottom: .5rem;}
+.sp-tl-day {flex: 0 0 4.2rem; font-size: .8rem; font-weight: 700;
+            color: var(--ink-mid);}
+.sp-tl-track {
+  position: relative; flex: 1 1 auto; height: 30px; border-radius: 8px;
+  background: var(--paper-2); border: 1px solid var(--line); overflow: hidden;
+}
+.sp-tl-seg {position: absolute; top: 0; bottom: 0;}
+.sp-tl-good {background: var(--leaf);}
+.sp-tl-fair {background: #8FBF9F;}
+.sp-tl-axis {display: flex; justify-content: space-between;
+             margin: .1rem 0 .7rem calc(4.2rem + .7rem);
+             font-size: .68rem; color: var(--ink-soft);}
+.sp-tl-key {display: flex; gap: .9rem; flex-wrap: wrap; font-size: .76rem;
+            color: var(--ink-soft); margin-bottom: .6rem;}
+.sp-tl-key i {display: inline-block; width: 12px; height: 12px;
+              border-radius: 3px; margin-right: .3rem; vertical-align: -2px;}
+
+/* ---- phone mockup ------------------------------------------------------ */
+.sp-phone {
+  width: 280px; max-width: 100%; margin: 0 auto;
+  background: #10231B; border-radius: 34px; padding: 10px;
+  box-shadow: 0 10px 30px rgba(15,61,46,.28);
+}
+.sp-phone-screen {background: #EDEFF1; border-radius: 26px; overflow: hidden;}
+.sp-notch {height: 20px; position: relative; background: #10231B;}
+.sp-notch::after {
+  content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+  top: 3px; width: 86px; height: 14px; background: #10231B; border-radius: 0 0 12px 12px;
+}
+.sp-status {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .3rem .75rem; font-size: .66rem; font-weight: 700;
+  color: #4A574F; background: #EDEFF1;
+}
+.sp-msg-head {
+  background: var(--forest); color: #fff; padding: .55rem .8rem;
+  font-size: .82rem; font-weight: 700; display: flex; align-items: center; gap: .4rem;
+}
+.sp-msg-body {padding: .8rem .7rem 1rem .7rem; min-height: 8.5rem;}
+.sp-bubble {
+  background: #fff; border-radius: 16px 16px 16px 5px; padding: .65rem .8rem;
+  font-size: .85rem; line-height: 1.5; color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+}
+.sp-bubble-time {font-size: .62rem; color: var(--ink-soft); margin-top: .3rem;
+                 padding-left: .25rem;}
+
+/* ---- badges ------------------------------------------------------------ */
+.sp-badges {display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center;
+            margin-top: .8rem;}
+.sp-badge {
+  display: inline-block; padding: .22rem .6rem; border-radius: 999px;
+  font-size: .7rem; font-weight: 700; letter-spacing: .2px;
+}
+.sp-badge-warn {background: #FDF3D9; color: #6B5200; border: 1px solid #E8D08A;}
+.sp-badge-mute {background: var(--paper-2); color: var(--ink-mid);
+                border: 1px solid var(--line);}
+.sp-badge-live {background: #E6F2EA; color: #1E4D2B; border: 1px solid #BCD9C2;}
+
+/* ---- freshness strip --------------------------------------------------- */
+.sp-fresh {
+  display: flex; gap: .6rem; align-items: flex-start; border-radius: var(--r-sm);
+  padding: .6rem .85rem; font-size: .88rem; line-height: 1.45;
+  border: 1px solid; margin-bottom: .55rem;
+}
+.sp-fresh-live   {background:#E9F4EC; border-color:#BCD9C2; color:#194D30;}
+.sp-fresh-stale  {background:#FDF6E3; border-color:#E8D08A; color:#5F4A00;}
+.sp-fresh-cached {background:#EDF1F7; border-color:#C3D0E4; color:#22405F;}
+.sp-fresh-demo   {background:#FBE9E7; border-color:#EFB4AF; color:#8A1C14;}
+
+/* ---- section headings -------------------------------------------------- */
+.sp-h {
+  font-family: var(--serif); font-size: 1.5rem; font-weight: 600;
+  color: var(--ink); letter-spacing: -.5px; margin: .2rem 0 .15rem 0;
+}
+.sp-h-sub {color: var(--ink-soft); font-size: .93rem; line-height: 1.5;
+           margin-bottom: .8rem;}
+.sp-note {
+  background: var(--paper-2); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: .65rem .85rem; font-size: .87rem;
+  line-height: 1.5; color: var(--ink-mid);
+}
+
+/* ---- stat band --------------------------------------------------------- */
+.sp-band {
+  background: linear-gradient(135deg, #0F3D2E 0%, #1B5940 100%);
+  border-radius: var(--r-lg); padding: 1.15rem 1.2rem; color: #fff;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem;
+  margin-bottom: 1rem; box-shadow: var(--shadow);
+}
+.sp-band-n {font-family: var(--serif); font-size: 2.0rem; font-weight: 700;
+            line-height: 1; letter-spacing: -1px;}
+.sp-band-l {font-size: .74rem; color: #BFD8CA; margin-top: .3rem;
+            line-height: 1.35;}
+
+/* ---- finding cards ----------------------------------------------------- */
+.sp-finds {display: grid; gap: .7rem; grid-template-columns: repeat(2, 1fr);}
+.sp-find {
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 5px solid var(--maize); border-radius: var(--r-md);
+  padding: .85rem .95rem; box-shadow: var(--shadow-sm);
+}
+.sp-find-h {font-weight: 750; font-size: .95rem; color: var(--ink);
+            margin-bottom: .25rem; display: flex; gap: .45rem; align-items: center;}
+.sp-find-b {font-size: .84rem; line-height: 1.5; color: var(--ink-mid);}
+
+/* ---- station card ------------------------------------------------------ */
+.sp-chiprow {display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .5rem;}
+.sp-chip {
+  background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-mid);
+  border-radius: 999px; padding: .22rem .65rem; font-size: .76rem; font-weight: 600;
+}
+
+/* ---- footer ------------------------------------------------------------ */
+.sp-footer {
+  background: var(--forest); color: #D9E8DF; border-radius: var(--r-lg);
+  padding: 1.4rem 1.5rem; margin-top: 1.4rem;
+}
+.sp-footer h4 {font-family: var(--serif); color: #fff; font-size: 1.05rem;
+               margin: 0 0 .45rem 0; font-weight: 600;}
+.sp-footer a {color: var(--maize); text-decoration: none; font-weight: 600;}
+.sp-footer a:hover {text-decoration: underline;}
+.sp-foot-grid {display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 1.4rem;}
+.sp-foot-grid p, .sp-foot-grid li {font-size: .85rem; line-height: 1.55;}
+.sp-foot-grid ul {margin: 0; padding-left: 1.05rem;}
+.sp-foot-rule {border-top: 1px solid rgba(255,255,255,.16); margin-top: 1.1rem;
+               padding-top: .8rem; font-size: .78rem; color: #A9C4B5;}
+
+/* ---- streamlit tabs as pills ------------------------------------------- */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  gap: .45rem; background: transparent; border-bottom: none;
+  padding: 0 0 .3rem 0; flex-wrap: wrap;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 999px; padding: .42rem 1rem; height: auto;
+  color: var(--ink-mid); font-weight: 650; font-size: .92rem;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+  background: var(--forest) !important; border-color: var(--forest) !important;
+  color: #fff !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"],
+[data-testid="stTabs"] [data-baseweb="tab-border"] {display: none;}
+
+/* ---- streamlit bits in the new palette --------------------------------- */
+[data-testid="stExpander"] details {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+hr {border-color: var(--line);}
+
+/* ---- mobile ------------------------------------------------------------ */
+@media (max-width: 760px) {
+  .sp-tiles {grid-template-columns: repeat(2, 1fr);}
+  .sp-band  {grid-template-columns: repeat(2, 1fr);}
+  .sp-finds {grid-template-columns: 1fr;}
+  .sp-foot-grid {grid-template-columns: 1fr;}
+  .sp-week {grid-template-columns: repeat(4, 1fr);}
+}
+@media (max-width: 480px) {
+  .block-container {padding-left: .8rem; padding-right: .8rem;}
+  .sp-title {font-size: 2.0rem;}
+  .sp-hero {padding: 1.25rem 1.2rem;}
+  .sp-hero-inner {gap: 1rem;}
+  .sp-ring-wrap {min-width: 0; width: 100%;}
+  .sp-action-head {font-size: 1.2rem;}
+  .sp-tile-val {font-size: 1.5rem;}
+  .sp-band-n {font-size: 1.6rem;}
+  .sp-week {grid-template-columns: repeat(3, 1fr);}
+  .sp-tl-day {flex-basis: 3.2rem; font-size: .74rem;}
+}

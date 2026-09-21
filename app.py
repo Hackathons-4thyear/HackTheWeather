@@ -3,11 +3,16 @@
 Streamlit dashboard. Written farmer-first: the answer comes before the data,
 plain language before jargon, and anything we are unsure about says so.
 
+Presentation lives in ui/styles.css and ui/components.py; this module wires the
+services to those components and computes nothing the engine has not already
+produced.
+
     streamlit run app.py
 """
 
 from __future__ import annotations
 
+import html
 import sys
 from pathlib import Path
 
@@ -29,143 +34,19 @@ from services import forecast as fc  # noqa: E402
 from services import messages as msg  # noqa: E402
 from services import sms_sender  # noqa: E402
 from services import spray_window as sw  # noqa: E402
+from ui import components as C  # noqa: E402
+
+APP_URL = "https://shamba-pulse-jkuat.streamlit.app/"
+REPO_URL = "https://github.com/Hackathons-4thyear/HackTheWeather"
 
 st.set_page_config(
     page_title="Shamba Pulse",
     page_icon="🌱",
-    layout="centered",          # mobile-friendly: farmers are on phones
+    layout="centered",
     initial_sidebar_state="collapsed",
 )
 
-# Mobile-first styling. Big touch targets, high contrast, no dense tables.
-# Scoped CSS. Everything here is presentation only - colours for risk levels
-# still come from config.RISK_COLORS so the dashboard, the charts and the
-# backtest can never disagree about what MODERATE looks like.
-st.markdown("""
-<style>
-  :root {
-    --ink:      #1f2420;
-    --ink-soft: #55605a;
-    --line:     #e2ddd2;
-    --panel:    #ffffff;
-    --green:    #2f6b3f;
-  }
-  /* Streamlit's toolbar floats over the page, so the hero needs room
-     to clear it - at 1.4rem the app name was being clipped. */
-  .block-container {padding-top: 3.2rem; padding-bottom: 4rem;
-                    max-width: 48rem;}
-
-  /* --- hero ------------------------------------------------------------ */
-  .hero-name {font-size: 2.0rem; font-weight: 800; letter-spacing: -0.8px;
-              margin: 0 0 0.15rem 0; color: var(--ink); line-height: 1.1;}
-  .hero-sub  {color: var(--ink-soft); font-size: 1.0rem; margin: 0 0 1.1rem 0;
-              line-height: 1.45;}
-
-  .risk-card {border-radius: 16px; padding: 1.4rem 1.5rem; margin-bottom: 0.9rem;}
-  .risk-kicker {font-size: 0.78rem; letter-spacing: 1.4px; font-weight: 700;
-                text-transform: uppercase; opacity: 0.92;}
-  .risk-level {font-size: 3.0rem; font-weight: 800; line-height: 1.05;
-               letter-spacing: -1.5px; margin: 0.15rem 0 0 0;
-               display: flex; align-items: center; gap: 0.6rem;}
-  .risk-icon  {font-size: 2.3rem; line-height: 1;}
-  .risk-action {font-size: 1.12rem; font-weight: 600; margin-top: 0.55rem;
-                line-height: 1.4;}
-
-  .why {background: var(--panel); border: 1px solid var(--line);
-        border-left: 4px solid var(--green); border-radius: 10px;
-        padding: 0.9rem 1.05rem; margin-bottom: 0.5rem;}
-  .why-h {font-weight: 700; font-size: 0.8rem; letter-spacing: 1px;
-          text-transform: uppercase; color: var(--ink-soft);
-          margin-bottom: 0.45rem;}
-  .why li {margin-bottom: 0.35rem; line-height: 1.5;}
-  .why ul {margin: 0; padding-left: 1.1rem;}
-
-  /* --- freshness strip -------------------------------------------------- */
-  .fresh {display: flex; align-items: flex-start; gap: 0.55rem;
-          border-radius: 10px; padding: 0.6rem 0.85rem; font-size: 0.9rem;
-          line-height: 1.45; margin-bottom: 0.5rem; border: 1px solid;}
-  .fresh-live   {background:#eef6ef; border-color:#bcd9c2; color:#1e4d2b;}
-  .fresh-stale  {background:#fdf6e3; border-color:#e8d08a; color:#6b5200;}
-  .fresh-cached {background:#eef2f8; border-color:#c3d0e4; color:#24405e;}
-  .fresh-demo   {background:#fdecea; border-color:#f0b3ae; color:#8a1c14;}
-
-  /* --- metric cards ----------------------------------------------------- */
-  .mcard {background: var(--panel); border: 1px solid var(--line);
-          border-radius: 12px; padding: 0.8rem 0.9rem; height: 100%;}
-  .mlabel {font-size: 0.74rem; letter-spacing: 0.6px; text-transform: uppercase;
-           color: var(--ink-soft); font-weight: 700; margin-bottom: 0.25rem;}
-  .mvalue {font-size: 1.65rem; font-weight: 800; color: var(--ink);
-           line-height: 1.1; letter-spacing: -0.5px;}
-  .munit  {font-size: 0.88rem; font-weight: 600; color: var(--ink-soft);
-           margin-left: 0.15rem;}
-  .mnote  {font-size: 0.78rem; color: var(--ink-soft); margin-top: 0.2rem;
-           line-height: 1.35;}
-
-  /* --- spray window cards ---------------------------------------------- */
-  .win {background: var(--panel); border: 1px solid var(--line);
-        border-left: 5px solid #2e7d32; border-radius: 12px;
-        padding: 0.85rem 1rem; margin-bottom: 0.6rem;}
-  .win-fair {border-left-color: #f9a825;}
-  .win-top {display:flex; align-items:center; justify-content:space-between;
-            gap:0.6rem; flex-wrap:wrap;}
-  .win-when {font-weight: 750; font-size: 1.08rem; color: var(--ink);}
-  .win-meta {color: var(--ink-soft); font-size: 0.87rem; margin-top: 0.3rem;
-             line-height: 1.5;}
-  .pill {display:inline-block; padding:0.12rem 0.6rem; border-radius:999px;
-         font-size:0.72rem; font-weight:800; letter-spacing:0.5px;}
-  .pill-good {background:#e6f2e8; color:#1e4d2b; border:1px solid #bcd9c2;}
-  .pill-fair {background:#fdf3d9; color:#6b5200; border:1px solid #e8d08a;}
-
-  /* --- SMS bubbles ------------------------------------------------------ */
-  .phone {background:#eceff1; border:1px solid var(--line); border-radius:16px;
-          padding:0.85rem 0.8rem 0.7rem 0.8rem; min-height: 11rem;}
-  .bubble {background:#ffffff; border-radius:14px 14px 14px 4px;
-           padding:0.75rem 0.9rem; font-size:0.94rem; line-height:1.5;
-           color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,0.09);}
-  .bubble-meta {font-size:0.75rem; color:var(--ink-soft); margin-top:0.45rem;
-                padding-left:0.2rem;}
-  .lang-h {font-weight:750; font-size:0.95rem; margin-bottom:0.4rem;
-           display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;}
-
-  .badge {display:inline-block; padding:0.1rem 0.5rem; border-radius:999px;
-          font-size:0.68rem; font-weight:800; letter-spacing:0.3px;}
-  .badge-warn {background:#fdf3d9; color:#6b5200; border:1px solid #e8d08a;}
-  .badge-mute {background:#eef2f8; color:#24405e; border:1px solid #c3d0e4;}
-
-  /* --- misc ------------------------------------------------------------- */
-  .sect {font-size:1.32rem; font-weight:800; letter-spacing:-0.4px;
-         color:var(--ink); margin:0.3rem 0 0.15rem 0;}
-  .sect-sub {color:var(--ink-soft); font-size:0.92rem; margin-bottom:0.7rem;
-             line-height:1.45;}
-  .ruled {color:var(--ink-soft); font-size:0.88rem; line-height:1.5;
-          background:#f4f1ea; border-radius:9px; padding:0.6rem 0.8rem;
-          border:1px solid var(--line);}
-
-  @media (max-width: 640px) {
-    .block-container {padding-left: 0.85rem; padding-right: 0.85rem;
-                      padding-top: 3.4rem;}
-    .hero-name  {font-size: 1.7rem;}
-    .risk-level {font-size: 2.4rem;}
-    .risk-icon  {font-size: 1.9rem;}
-    .mvalue     {font-size: 1.4rem;}
-    .phone      {min-height: auto;}
-  }
-</style>
-""", unsafe_allow_html=True)
-
-
-# Text colour paired with each risk background so the label is always legible.
-# Checked against WCAG AA: white on the amber MODERATE is only 1.97:1, so that
-# one takes dark text (8.00:1) instead. Colour is never the sole signal - every
-# risk level also carries an icon and the word itself.
-RISK_TEXT = {
-    "LOW": "#ffffff", "MODERATE": "#1f2420",
-    "HIGH": "#ffffff", de.UNKNOWN: "#ffffff",
-}
-
-RISK_ICON = {
-    "LOW": "✓", "MODERATE": "⚠", "HIGH": "⚑", de.UNKNOWN: "?",
-}
+st.markdown(C.load_css(), unsafe_allow_html=True)
 
 
 # --------------------------------------------------------------------------
@@ -213,167 +94,81 @@ def get_backtest(alert_hour: int, scope: str) -> pd.DataFrame:
 # --------------------------------------------------------------------------
 
 def render_freshness(status: ds.DataStatus, forecast: fc.ForecastResult) -> None:
-    """One compact strip saying where every number on the page came from.
-
-    Same information as before, same four states - live / stale / cached /
-    demo - just styled consistently instead of as three stacked alert boxes.
-    """
+    """One compact strip per source, saying plainly what the page is built on."""
+    esc = C.esc
     if status.source == ds.DEMO:
-        cls, icon, text = ("fresh-demo", "&#9888;",
-            "<b>DEMO DATA &mdash; not real station readings.</b> "
-            "No live or cached Conduit data was available, so everything below "
-            "the forecast is generated to demonstrate how the app behaves.")
+        kind, glyph = "demo", "&#9888;"
+        body = ("<b>DEMO DATA &mdash; not real station readings.</b> No live or "
+                "cached Conduit data was available, so everything below the "
+                "forecast is generated to demonstrate how the app behaves.")
     elif status.source == ds.CACHED:
-        cls, icon, text = ("fresh-cached", "&#128451;",
-            f"<b>Station unreachable &mdash; showing cached history.</b> "
-            f"Real Conduit data, {status.age_text()}. {status.detail}")
+        kind, glyph = "cached", "&#128451;"
+        body = (f"<b>Station unreachable &mdash; showing cached history.</b> "
+                f"Real Conduit data, {esc(status.age_text())}. "
+                f"{esc(status.detail)}")
     elif status.is_stale:
-        cls, icon, text = ("fresh-stale", "&#128337;",
-            f"<b>Station connected, newest reading is {status.age_text()}</b> "
-            f"({status.latest:%a %d %b %H:%M}). The station publishes on a lag, "
-            f"so risk below is based on data up to that time, not this minute.")
+        kind, glyph = "stale", "&#128337;"
+        body = (f"<b>Station connected, newest reading is "
+                f"{esc(status.age_text())}</b> "
+                f"({esc(format(status.latest, '%a %d %b %H:%M'))}). The station "
+                f"publishes on a lag, so risk below is based on data up to that "
+                f"time, not this minute.")
     else:
-        cls, icon, text = ("fresh-live", "&#128225;",
-            f"<b>Live station data.</b> {status.detail}")
-
-    st.markdown(f"<div class='fresh {cls}'><div>{icon}</div>"
-                f"<div>{text}</div></div>", unsafe_allow_html=True)
+        kind, glyph = "live", "&#128225;"
+        body = f"<b>Live station data.</b> {esc(status.detail)}"
+    st.markdown(C.freshness(kind, body, glyph), unsafe_allow_html=True)
 
     if forecast.ok:
-        st.markdown(
-            "<div class='fresh fresh-cached'><div>&#127782;</div><div>"
-            f"<b>7-day forecast is live</b> from Open-Meteo for {config.SITE_NAME} "
-            "&mdash; real data, independent of the station.</div></div>",
-            unsafe_allow_html=True)
+        st.markdown(C.freshness(
+            "cached",
+            f"<b>7-day forecast is live</b> from Open-Meteo for "
+            f"{esc(config.SITE_NAME)} &mdash; real data, independent of the "
+            f"station.", "&#127782;"), unsafe_allow_html=True)
     else:
-        st.markdown(
-            f"<div class='fresh fresh-stale'><div>&#127782;</div><div>"
-            f"Forecast unavailable: {forecast.error}</div></div>",
-            unsafe_allow_html=True)
+        st.markdown(C.freshness(
+            "stale", f"Forecast unavailable: {esc(forecast.error)}",
+            "&#127782;"), unsafe_allow_html=True)
 
 
-def render_data_quality_body() -> None:
-    """Compact summary of what we found wrong with the station data.
+def render_hero(status: ds.DataStatus, risk: de.RiskAssessment) -> None:
+    if status.source == ds.DEMO:
+        src_text, dot = "DEMO DATA", "#B3261E"
+    elif status.source == ds.CACHED:
+        src_text, dot = "Cached station data", "#5F6B73"
+    elif status.is_stale:
+        src_text, dot = "Station connected (lagging)", "#E8A317"
+    else:
+        src_text, dot = "Live station data", "#2E7D4F"
 
-    Kept short here; docs/DATA_QUALITY.md carries the full evidence. Judges and
-    farmers both benefit from seeing that the numbers were checked rather than
-    trusted.
-    """
-    st.markdown(
-        "**Data quality — what we checked.** We did not trust the obvious "
-        "field names. Three of these would have produced confidently wrong "
-        "advice."
-    )
-    st.markdown(
-            """
-| What we found | Why it mattered | What we did |
-|---|---|---|
-| **Rain gauge 1's per-interval field (`rg1`) captures only 6% of rainfall** — 18.6 mm recorded against 301.8 mm actual over OND 2025 | The spray adviser would have thought it never rains, and recommended spraying into a storm | Derive rainfall by differencing the running daily total `rg1tt` |
-| **Rain gauge 2 is faulty** — its daily total resets ~21 times a day instead of once, reconstructing to 4,365 mm in a ~300 mm season | It had been used to fill gaps in gauge 1 | Never used, and never a fallback |
-| **Timestamps are UTC, not local** (Kenya is UTC+3) | A 3-hour shift would silently corrupt every overnight humid-hours count and move the daily boundary | Converted to Africa/Nairobi on ingest |
-| **`wind_gust_dir` duplicates `wind_gust`** (identical on 100% of rows, range −999.9 to 13.9) | Not a direction at all | Not used |
-| **`si1145_uv` reads a constant zero** | A dead channel | Not used; light channels are labelled raw counts, never W/m² |
-| **No soil-moisture or leaf-wetness sensor exists** | — | Never fabricated; humidity ≥ 90% is the stated leaf-wetness proxy |
-            """
-    )
-    st.markdown(
-        f"**Independent check:** our reconstructed rainfall totals "
-        f"**301.8 mm** for OND 2025 against **268.6 mm** from ERA5 "
-        f"reanalysis at the same coordinates — 12% apart. Daily correlation "
-        f"is modest (Spearman 0.41), which is expected rather than "
-        f"concerning: ERA5 is a ~9 km grid cell and the station is one "
-        f"point inside it, and tropical rain here is convective. "
-        f"This is a credibility check, not calibration — no station value "
-        f"is adjusted toward ERA5."
-    )
-    st.caption(
-        "Station coverage for OND 2025: 98.6–99.1% per month, 1.1% of "
-        "intervals missing, no gap longer than 6 hours. "
-        "Full evidence in docs/DATA_QUALITY.md; reproduce with "
-        "analysis/explore_data.py and analysis/validate_rain.py."
-    )
+    updated = (f"Updated {status.latest:%a %d %b %H:%M}"
+               if status.latest is not None else "Updated —")
+    pills = [(src_text, dot), (updated, ""), ("OND 2026 El Niño season", "")]
+    st.markdown(C.hero(risk.level, pills), unsafe_allow_html=True)
 
 
-# --------------------------------------------------------------------------
-# Risk card
-# --------------------------------------------------------------------------
-
-# The action sentence a farmer reads first. Deliberately imperative and
-# specific; the "why" underneath is the supporting detail, not the headline.
 RISK_ACTION = {
     "HIGH": "Spray your tomatoes and potatoes as soon as you safely can.",
-    "MODERATE": "Check your tomatoes and potatoes closely.",
+    "MODERATE": "Check your tomatoes and potatoes today.",
     "LOW": "No blight action needed today.",
     de.UNKNOWN: "Not enough station data to advise right now.",
 }
 
-RISK_KICKER = "Tomato / potato late blight"
 
-
-def _metric(label: str, value: str, unit: str = "", note: str = "") -> str:
-    unit_html = f"<span class='munit'>{unit}</span>" if unit else ""
-    note_html = f"<div class='mnote'>{note}</div>" if note else ""
-    return (f"<div class='mcard'><div class='mlabel'>{label}</div>"
-            f"<div class='mvalue'>{value}{unit_html}</div>{note_html}</div>")
-
-
-def render_hero(risk: de.RiskAssessment, advice: sw.SprayAdvice,
-                is_demo: bool) -> None:
-    """Name, subtitle, the risk card, the action sentence and the top reasons.
-
-    The three-second read: icon + word + colour, then one sentence saying what
-    to do. Colour is never the only signal.
-    """
-    st.markdown(
-        "<div class='hero-name'>&#127793; Shamba Pulse</div>"
-        "<div class='hero-sub'>Blight risk &amp; spray windows for Juja/Kiambu "
-        "farmers, from the JKUAT Conduit station.</div>",
-        unsafe_allow_html=True)
-
-
-def render_risk_card(risk: de.RiskAssessment, advice: sw.SprayAdvice,
-                     is_demo: bool) -> None:
-    bg = config.RISK_COLORS.get(risk.level, config.RISK_COLORS[de.UNKNOWN])
-    fg = RISK_TEXT.get(risk.level, "#ffffff")
-    icon = RISK_ICON.get(risk.level, "?")
-    action = RISK_ACTION.get(risk.level, RISK_ACTION[de.UNKNOWN])
-
+def render_action(risk: de.RiskAssessment, advice: sw.SprayAdvice) -> None:
     window = advice.best if advice else None
-    if window and risk.level in ("HIGH", "MODERATE"):
-        action += f" Best time to spray: {window.label}."
-    elif window and risk.level == "LOW":
-        action += f" Good spraying conditions {window.label} if you want them."
-
-    demo = ("<span class='badge badge-warn' style='margin-left:.5rem'>"
-            "DEMO DATA</span>") if is_demo else ""
-
-    st.markdown(
-        f"""<div class="risk-card" style="background:{bg};color:{fg}">
-              <div class="risk-kicker">{RISK_KICKER}{demo}</div>
-              <div class="risk-level"><span class="risk-icon">{icon}</span>
-                   <span>{risk.level}</span></div>
-              <div class="risk-action">{action}</div>
-            </div>""",
-        unsafe_allow_html=True)
-
-    reasons = [r for r in risk.reasons[:3]]
-    if reasons:
-        items = "".join(f"<li>{r}</li>" for r in reasons)
-        st.markdown(
-            f"<div class='why'><div class='why-h'>Why</div><ul>{items}</ul></div>",
-            unsafe_allow_html=True)
+    when = window.label if window else None
+    st.markdown(C.action_card(RISK_ACTION.get(risk.level, RISK_ACTION[de.UNKNOWN]),
+                              when, list(risk.reasons)),
+                unsafe_allow_html=True)
     if len(risk.reasons) > 3:
         with st.expander("More detail"):
             for r in risk.reasons[3:]:
                 st.write(f"- {r}")
 
 
-def render_metrics(risk: de.RiskAssessment, obs: pd.DataFrame,
-                   advice: sw.SprayAdvice) -> None:
-    """Four cards: the numbers behind the risk level, plus the next window."""
-    humid = f"{risk.humid_hours_last_24h:.0f}"
-
-    min_t = rain = "&mdash;"
+def render_tiles(risk: de.RiskAssessment, obs: pd.DataFrame,
+                 advice: sw.SprayAdvice) -> None:
+    min_t = rain = "—"
     if obs is not None and not obs.empty and "timestamp" in obs.columns:
         recent = obs[obs["timestamp"] >= obs["timestamp"].max() - pd.Timedelta(hours=24)]
         if "temperature_c" in recent and recent["temperature_c"].notna().any():
@@ -382,66 +177,130 @@ def render_metrics(risk: de.RiskAssessment, obs: pd.DataFrame,
             rain = f"{recent['rain_mm'].sum():.1f}"
 
     window = advice.best if advice else None
-    when = window.label.split(" ", 1) if window else None
-    next_win = when[1] if when and len(when) > 1 else ("none in 3 days" if not window else window.label)
-    win_note = when[0] if when else "no dry, calm daylight hours"
+    if window:
+        parts = window.label.split(" ", 1)
+        win_val = parts[1] if len(parts) > 1 else window.label
+        win_note = f"{parts[0]} · wind {window.mean_wind_ms:.1f} m/s"
+    else:
+        win_val, win_note = "None", "no dry, calm daylight hours in 3 days"
 
-    cards = [
-        _metric("Humid hours (24 h)", humid, " h",
-                f"at or above {config.HUTTON_RH_THRESHOLD_PCT:.0f}% RH"),
-        _metric("Lowest temp (24 h)", min_t, " &deg;C",
-                f"blight needs {config.HUTTON_MIN_TEMP_C:.0f}&deg;C+"),
-        _metric("Rain (24 h)", rain, " mm", "at the station"),
-        _metric("Next spray window", next_win, "", win_note),
-    ]
-    for col, card in zip(st.columns(4), cards):
-        col.markdown(card, unsafe_allow_html=True)
+    st.markdown(C.tiles([
+        ("droplet", "Humid hours (24 h)", f"{risk.humid_hours_last_24h:.0f}", " h",
+         f"≥{config.HUTTON_MIN_HUMID_HOURS} h triggers a Hutton day"),
+        ("thermometer", "Lowest temp (24 h)", min_t, " °C",
+         f"blight needs ≥{config.HUTTON_MIN_TEMP_C:.0f} °C"),
+        ("rain", "Rain (24 h)", rain, " mm", "measured at the station"),
+        ("clock", "Next spray window", win_val, "", win_note),
+    ]), unsafe_allow_html=True)
+
+
+def render_week(forecast_df: pd.DataFrame) -> None:
+    """Seven day tiles built from the forecast we already compute."""
+    st.markdown(C.section(
+        "The week ahead",
+        "Humid hours per day are what drive the Hutton criteria."),
+        unsafe_allow_html=True)
+
+    days: list[dict] = []
+    if forecast_df is not None and not forecast_df.empty:
+        daily = fc.daily_outlook(forecast_df)
+        for _, row in daily.head(7).iterrows():
+            humid = int(row.get("humid_hours", 0) or 0)
+            tmin = row.get("temp_min_c")
+            warm = tmin is not None and tmin >= config.HUTTON_MIN_TEMP_C
+            if humid >= config.HUTTON_MIN_HUMID_HOURS and warm:
+                level = "HIGH"
+            elif humid >= config.HUMID_HOURS_MODERATE:
+                level = "MODERATE"
+            else:
+                level = "LOW"
+            d = pd.Timestamp(row["day"])
+            days.append({"name": f"{d:%a}", "date": f"{d:%d %b}",
+                         "level": level, "humid_hours": humid})
+    st.markdown(C.week_strip(days), unsafe_allow_html=True)
+    if days:
+        st.caption(
+            "A day shown red meets both Hutton conditions on the forecast "
+            "— two of those in a row is what triggers a HIGH warning. "
+            "Forecast days are an outlook, not a measurement."
+        )
+
+
+def _daylight_rows(advice: sw.SprayAdvice) -> list[dict]:
+    """Turn windows into per-day bars positioned across the daylight span.
+
+    Pure geometry over values spray_window already produced - no thresholds or
+    decisions are made here.
+    """
+    d0 = config.SPRAY_DAYLIGHT_START
+    d1 = config.SPRAY_DAYLIGHT_END
+    span_min = (d1.hour * 60 + d1.minute) - (d0.hour * 60 + d0.minute)
+    if span_min <= 0:
+        return []
+
+    by_day: dict = {}
+    for w in advice.windows:
+        key = w.start.date()
+        start_min = w.start.hour * 60 + w.start.minute - (d0.hour * 60 + d0.minute)
+        end_min = w.end.hour * 60 + w.end.minute - (d0.hour * 60 + d0.minute)
+        left = max(0.0, 100.0 * start_min / span_min)
+        right = min(100.0, 100.0 * end_min / span_min)
+        if right <= left:
+            continue
+        rh = (f", RH up to {w.max_humidity_pct:.0f}%"
+              if w.max_humidity_pct else "")
+        by_day.setdefault(key, {"day": f"{w.start:%a %d}", "segments": []})
+        by_day[key]["segments"].append({
+            "left_pct": left, "width_pct": right - left, "quality": w.quality,
+            "title": (f"{w.label} · {w.quality} · wind "
+                      f"{w.mean_wind_ms:.1f} m/s{rh}"),
+        })
+    return [by_day[k] for k in sorted(by_day)]
 
 
 def render_spray(advice: sw.SprayAdvice) -> None:
-    st.markdown("<div class='sect'>When to spray</div>", unsafe_allow_html=True)
+    st.markdown(C.section(
+        "When to spray",
+        "Daylight hours only. Green means the fungicide will stay where you "
+        "put it."), unsafe_allow_html=True)
 
     if not advice.has_window:
+        reasons = " ".join(advice.reasons) if advice.reasons else ""
         st.markdown(
-            "<div class='sect-sub'>No good spray window in the next 3 days.</div>",
-            unsafe_allow_html=True)
-        for r in advice.reasons:
-            st.write(f"- {r}")
+            f"<div class='sp-note'><b>No good spray window in the next "
+            f"3 days.</b> {C.esc(reasons)}</div>", unsafe_allow_html=True)
         _render_rejections(advice)
         return
 
-    st.markdown(
-        f"<div class='sect-sub'>Checked {advice.hours_considered} hours "
-        f"({advice.evaluated_from:%a %H:%M} to {advice.evaluated_to:%a %H:%M}). "
-        f"Best first.</div>", unsafe_allow_html=True)
-
-    for i, w in enumerate(advice.windows[:4], 1):
-        cls = "win" if w.quality == "GOOD" else "win win-fair"
-        pill = "pill-good" if w.quality == "GOOD" else "pill-fair"
-        rh = (f" &middot; leaves dry, max {w.max_humidity_pct:.0f}% RH"
-              if w.max_humidity_pct else "")
-        clipped = " &middot; trimmed to daylight" if w.was_clipped else ""
+    rows = _daylight_rows(advice)
+    if rows:
         st.markdown(
-            f"""<div class="{cls}">
-                  <div class="win-top">
-                    <span class="win-when">{w.label}</span>
-                    <span class="pill {pill}">{w.quality}</span>
-                  </div>
-                  <div class="win-meta">
-                    {w.duration_hours:.1f} hours &middot; wind
-                    {w.mean_wind_ms:.1f} m/s{rh} &middot; stays dry
-                    {w.dry_hours_after:.0f} h afterwards{clipped}
-                  </div>
-                </div>""",
+            C.spray_timeline(rows,
+                             f"{config.SPRAY_DAYLIGHT_START:%H:%M}",
+                             f"{config.SPRAY_DAYLIGHT_END:%H:%M}"),
             unsafe_allow_html=True)
-        with st.expander(f"Why window {i} works"):
-            for r in w.reasons:
-                st.write(f"- {r}")
+
+    best = advice.best
+    rh = f" &middot; RH up to {best.max_humidity_pct:.0f}%" if best.max_humidity_pct else ""
+    st.markdown(
+        f"<div class='sp-note'><b>Best: {C.esc(best.label)}</b> &mdash; "
+        f"{best.duration_hours:.1f} hours &middot; {C.esc(best.quality)} "
+        f"&middot; wind {best.mean_wind_ms:.1f} m/s{rh} &middot; stays dry "
+        f"{best.dry_hours_after:.0f} h afterwards.</div>",
+        unsafe_allow_html=True)
+
+    with st.expander(f"Why {C.esc(best.label)} works"):
+        for r in best.reasons:
+            st.write(f"- {r}")
+    if len(advice.windows) > 1:
+        with st.expander(f"Other windows ({len(advice.windows) - 1})"):
+            for w in advice.windows[1:5]:
+                st.write(f"**{w.label}** - {w.duration_hours:.1f} h, {w.quality}, "
+                         f"wind {w.mean_wind_ms:.1f} m/s")
 
     _render_rejections(advice)
 
 
-# Rejection keys rendered as phrases that read inside a sentence.
 _REJECT_PHRASE = {
     sw.R_NIGHT: "outside daylight",
     sw.R_WET_LEAF: "with wet leaves",
@@ -457,42 +316,39 @@ _REJECT_PHRASE = {
 
 
 def _render_rejections(advice: sw.SprayAdvice) -> None:
-    """One friendly sentence instead of a bare tally."""
     if not advice.rejection_counts:
         return
     total = sum(advice.rejection_counts.values())
-    parts = [f"{n} {_REJECT_PHRASE.get(reason, reason)}"
-             for reason, n in sorted(advice.rejection_counts.items(),
-                                     key=lambda kv: -kv[1])]
-    if len(parts) > 1:
-        listed = ", ".join(parts[:-1]) + " and " + parts[-1]
-    else:
-        listed = parts[0]
+    parts = [f"{n} {_REJECT_PHRASE.get(r, r)}"
+             for r, n in sorted(advice.rejection_counts.items(),
+                                key=lambda kv: -kv[1])]
+    listed = (", ".join(parts[:-1]) + " and " + parts[-1]
+              if len(parts) > 1 else parts[0])
     st.markdown(
-        f"<div class='ruled'>Other hours were ruled out: {listed}. "
+        f"<div class='sp-note'>Other hours were ruled out: {C.esc(listed)}. "
         f"That is {total} of {advice.hours_considered} hours checked.</div>",
         unsafe_allow_html=True)
 
 
-# One chart template so every figure in the app reads as the same system:
-# same fonts, muted gridlines, legend below, hover with units.
-CHART_FONT = dict(family="sans-serif", size=12, color="#1f2420")
-GRID = "#e6e1d7"
+# One Plotly template so every figure reads as the same system.
+CHART_FONT = dict(family="Inter, system-ui, sans-serif", size=12, color="#1C2A24")
+GRID = "#E4DCCD"
+PAPER = "#FAF7F0"
 
 
 def style_fig(fig, height: int, *, legend: bool = False, ytitle: str = "") -> None:
     fig.update_layout(
         height=height,
-        margin=dict(l=8, r=8, t=28, b=8),
+        margin=dict(l=8, r=8, t=26, b=8),
         hovermode="x unified",
-        plot_bgcolor="#ffffff",
+        plot_bgcolor="#FFFFFF",
         paper_bgcolor="rgba(0,0,0,0)",
         font=CHART_FONT,
         showlegend=legend,
-        legend=dict(orientation="h", yanchor="top", y=-0.18,
-                    x=0, bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(font_size=12, bgcolor="#ffffff",
-                        bordercolor=GRID, font_family="sans-serif"),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, x=0,
+                    bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(font_size=12, bgcolor="#FFFFFF", bordercolor=GRID,
+                        font_family="Inter, sans-serif"),
     )
     fig.update_xaxes(showgrid=True, gridcolor=GRID, linecolor=GRID,
                      nticks=6, ticks="outside", tickcolor=GRID)
@@ -514,35 +370,35 @@ def render_forecast_chart(df: pd.DataFrame) -> None:
     if "humidity_pct" in df.columns:
         fig.add_trace(go.Scatter(
             x=df["timestamp"], y=df["humidity_pct"], name="Humidity",
-            line=dict(color="#1565c0", width=2), hovertemplate="%{y:.0f}%<extra></extra>",
+            line=dict(color="#2E7D4F", width=2.4), hovertemplate="%{y:.0f}%<extra></extra>",
         ), row=1, col=1)
         fig.add_hline(
             y=config.HUTTON_RH_THRESHOLD_PCT, row=1, col=1,
-            line=dict(color="#c62828", width=2, dash="dash"),
+            line=dict(color="#B3261E", width=2, dash="dash"),
             annotation_text=f"{config.HUTTON_RH_THRESHOLD_PCT:.0f}% blight threshold",
             annotation_position="top left",
-            annotation_font=dict(size=10, color="#c62828"),
+            annotation_font=dict(size=11, color="#B3261E"),
         )
         fig.update_yaxes(range=[0, 105], row=1, col=1, title_text="%")
 
     if "temperature_c" in df.columns:
         fig.add_trace(go.Scatter(
             x=df["timestamp"], y=df["temperature_c"], name="Temperature",
-            line=dict(color="#ef6c00", width=2), hovertemplate="%{y:.1f}°C<extra></extra>",
+            line=dict(color="#B3261E", width=2.4), hovertemplate="%{y:.1f}°C<extra></extra>",
         ), row=2, col=1)
         fig.add_hline(
             y=config.HUTTON_MIN_TEMP_C, row=2, col=1,
-            line=dict(color="#c62828", width=2, dash="dash"),
+            line=dict(color="#B3261E", width=2, dash="dash"),
             annotation_text=f"{config.HUTTON_MIN_TEMP_C:.0f}°C blight threshold",
             annotation_position="bottom left",
-            annotation_font=dict(size=10, color="#c62828"),
+            annotation_font=dict(size=11, color="#B3261E"),
         )
         fig.update_yaxes(row=2, col=1, title_text="°C")
 
     if "rain_mm" in df.columns:
         fig.add_trace(go.Bar(
             x=df["timestamp"], y=df["rain_mm"], name="Rain",
-            marker_color="#0277bd", hovertemplate="%{y:.1f} mm<extra></extra>",
+            marker_color="#2E7D4F", hovertemplate="%{y:.1f} mm<extra></extra>",
         ), row=3, col=1)
         fig.update_yaxes(row=3, col=1, title_text="mm")
 
@@ -577,48 +433,75 @@ def render_outlook_table(df: pd.DataFrame) -> None:
 
 def render_sms_preview(alert: alerts_mod.Alert,
                        decision: alerts_mod.SendDecision) -> None:
-    st.markdown("<div class='sect'>The message a farmer would get</div>",
-                unsafe_allow_html=True)
-    st.markdown(
-        "<div class='sect-sub'>Farmers receive an SMS &mdash; they do not open "
-        "this dashboard. One message, under 160 characters, on any phone.</div>",
-        unsafe_allow_html=True)
+    st.markdown(C.section(
+        "The message a farmer would get",
+        "Farmers receive an SMS — they do not open this dashboard. One "
+        "message, under 160 characters, on any phone."), unsafe_allow_html=True)
 
     if decision.send:
-        st.markdown(
-            f"<div class='fresh fresh-live'><div>&#128241;</div><div>"
-            f"<b>Would send now</b> &mdash; {decision.reason}</div></div>",
-            unsafe_allow_html=True)
+        st.markdown(C.freshness(
+            "live", f"<b>Would send now</b> &mdash; {C.esc(decision.reason)}",
+            "&#128241;"), unsafe_allow_html=True)
     else:
-        st.markdown(
-            f"<div class='fresh fresh-cached'><div>&#128276;</div><div>"
-            f"<b>Would not send</b> &mdash; {decision.reason}</div></div>",
-            unsafe_allow_html=True)
+        st.markdown(C.freshness(
+            "cached", f"<b>Would not send</b> &mdash; {C.esc(decision.reason)}",
+            "&#128276;"), unsafe_allow_html=True)
 
-    for col, lang in zip(st.columns(2), msg.LANGUAGES):
-        text = alert.sms_for(lang)
-        badge = ""
-        if lang == "sw" and not msg.SW_TRANSLATION_REVIEWED:
-            badge = ("<span class='badge badge-warn'>"
-                     "Kiswahili pending native review</span>")
-        with col:
-            st.markdown(
-                f"<div class='lang-h'>{msg.LANGUAGE_NAMES[lang]}{badge}</div>"
-                f"<div class='phone'><div class='bubble'>{text}</div>"
-                f"<div class='bubble-meta'>{len(text)} / "
-                f"{config.SMS_MAX_CHARS} characters</div></div>",
-                unsafe_allow_html=True)
+    labels = {"en": "English", "sw": "Kiswahili"}
+    choice = st.radio("Language", [labels[l] for l in msg.LANGUAGES],
+                      horizontal=True, label_visibility="collapsed",
+                      key="sms_lang")
+    lang = next(l for l in msg.LANGUAGES if labels[l] == choice)
+    text = alert.sms_for(lang)
 
-    mode_note = sms_sender.describe_config()
-    st.markdown(
-        f"<div style='margin-top:0.7rem'>"
-        f"<span class='badge badge-mute'>Dry-run: no real SMS sent</span></div>"
-        f"<div class='mnote' style='margin-top:0.4rem'>{mode_note}</div>",
-        unsafe_allow_html=True)
+    clock = (f"{alert.created_at:%H:%M}" if alert.created_at is not None
+             else "08:30")
+    st.markdown(C.phone(text, clock=clock), unsafe_allow_html=True)
+
+    # The Kiswahili badge is shown whichever language is on screen: the
+    # translation is unreviewed whether or not the viewer happens to have the
+    # toggle set to Kiswahili, and hiding that behind a click would be a way of
+    # not saying it.
+    marks = [(f"{len(text)} / {config.SMS_MAX_CHARS} characters", "mute"),
+             ("Dry-run: no real SMS sent", "mute")]
+    if not msg.SW_TRANSLATION_REVIEWED:
+        marks.append(("Kiswahili pending native review", "warn"))
+    st.markdown(C.badges(marks), unsafe_allow_html=True)
+
     if not msg.SW_TRANSLATION_REVIEWED:
         st.caption(
             "The Kiswahili was written by a non-native speaker and is awaiting "
             "review. Open questions are listed in services/messages.py.")
+    st.caption(sms_sender.describe_config())
+
+
+def render_station_card(status: ds.DataStatus) -> None:
+    """Where the data comes from, with the station on a map."""
+    st.markdown(C.section(
+        "Where the data comes from",
+        "One weather station, on the JKUAT campus in Juja."),
+        unsafe_allow_html=True)
+
+    left, right = st.columns([1, 1])
+    with left:
+        st.map(pd.DataFrame({"lat": [config.JKUAT_LAT],
+                             "lon": [config.JKUAT_LON]}),
+               zoom=11, size=180, color="#2E7D4F")
+    with right:
+        st.markdown(
+            f"<div class='sp-card'><b>JKUAT Conduit station</b><br>"
+            f"<span style='color:#6B7770'>{config.JKUAT_LAT:.4f}, "
+            f"{config.JKUAT_LON:.4f} &middot; 1,524 m</span>"
+            f"{C.chips(['Humidity', 'Temperature', 'Rainfall', 'Wind', 'Pressure'])}"
+            f"<div class='sp-tile-note' style='margin-top:.6rem'>"
+            f"A reading every {config.STATION_INTERVAL_MINUTES} minutes "
+            f"&mdash; 96 a day. Archive: 476 days, 46,183 readings."
+            f"</div></div>", unsafe_allow_html=True)
+    st.caption(
+        "There is no soil-moisture or leaf-wetness sensor on this station, and "
+        "we never invent one — humidity at or above "
+        f"{config.HUTTON_RH_THRESHOLD_PCT:.0f}% is our stated leaf-wetness proxy."
+    )
 
 
 LEVEL_ORDER = {"LOW": 0, "MODERATE": 1, "HIGH": 2, de.UNKNOWN: -1}
@@ -659,20 +542,17 @@ def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
     eligible = int(results["eligible"].sum()) if "eligible" in results else n_sent
 
     era5 = get_rain_validation()
-    era5_note = "&mdash;"
+    era5_note = "—"
     if era5.ok:
-        st_ = vr.summarise_comparison(era5.df)
-        era5_note = f"{abs(st_['ratio'] - 1) * 100:.0f}"
+        _st = vr.summarise_comparison(era5.df)
+        era5_note = f"within {abs(_st['ratio'] - 1) * 100:.0f}%"
 
-    cards = [
-        _metric("Days replayed", f"{days:,}", "", "one morning at a time"),
-        _metric("HIGH-risk days", str(n_high), "", "Hutton criteria fired"),
-        _metric("Texts sent", str(n_sent), f" of {eligible}",
-                "send policy, no information hidden"),
-        _metric("Station vs ERA5", era5_note, " %", "apart on the season total"),
-    ]
-    for col, card in zip(st.columns(4), cards):
-        col.markdown(card, unsafe_allow_html=True)
+    st.markdown(C.stat_band([
+        (f"{days:,}", "days replayed, one morning at a time"),
+        (str(n_high), "days at HIGH risk"),
+        (f"{n_sent} of {eligible}", "texts sent, under the send policy"),
+        (era5_note, "of ERA5 on the season rainfall total"),
+    ]), unsafe_allow_html=True)
 
     if eligible:
         st.caption(
@@ -682,8 +562,7 @@ def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
         )
 
     fig = go.Figure()
-    colours = [config.RISK_COLORS.get(l, config.RISK_COLORS[de.UNKNOWN])
-               for l in results["level"]]
+    colours = [C.risk_bg(l) for l in results["level"]]
     fig.add_trace(go.Bar(
         x=pd.to_datetime(results["date"]),
         y=[LEVEL_ORDER.get(l, -1) + 1 for l in results["level"]],
@@ -700,9 +579,9 @@ def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
     if dates.min() <= adv_end and dates.max() >= adv_start:
         fig.add_vrect(
             x0=adv_start, x1=adv_end,
-            fillcolor="#1565c0", opacity=0.13, line_width=0, layer="below",
+            fillcolor="#0F3D2E", opacity=0.10, line_width=0, layer="below",
             annotation_text="KMD advisory", annotation_position="top left",
-            annotation_font=dict(size=10, color="#1565c0"),
+            annotation_font=dict(size=11, color="#0F3D2E"),
         )
 
     sent = results[results["would_send"]]
@@ -710,7 +589,7 @@ def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
         fig.add_trace(go.Scatter(
             x=pd.to_datetime(sent["date"]), y=[3.35] * len(sent),
             mode="markers", name="SMS sent",
-            marker=dict(symbol="triangle-down", size=11, color="#1a1a1a"),
+            marker=dict(symbol="triangle-down", size=11, color="#1C2A24"),
             hovertemplate="%{x|%d %b}<br>SMS sent<extra></extra>",
         ))
     style_fig(fig, 340, legend=True)
@@ -785,12 +664,12 @@ def render_era5_check(data: vr.ValidationData) -> None:
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=df["date"], y=df["station_mm"], name="Station (reconstructed)",
-        marker_color="#0277bd",
+        marker_color="#2E7D4F",
         hovertemplate="%{x|%d %b}<br>Station %{y:.1f} mm<extra></extra>",
     ))
     fig.add_trace(go.Bar(
         x=df["date"], y=df["era5_mm"], name="ERA5 reanalysis",
-        marker_color="#f9a825",
+        marker_color="#F2B705",
         hovertemplate="%{x|%d %b}<br>ERA5 %{y:.1f} mm<extra></extra>",
     ))
     style_fig(fig, 330, legend=True, ytitle="mm/day")
@@ -826,52 +705,33 @@ APP_URL = "https://shamba-pulse-jkuat.streamlit.app/"
 REPO_URL = "https://github.com/Hackathons-4thyear/HackTheWeather"
 
 
-def render_sidebar() -> None:
-    """About, credits and links. Technical controls live in the tabs."""
-    with st.sidebar:
-        st.markdown("<div class='sect'>About</div>", unsafe_allow_html=True)
-        st.markdown(
-            "**Shamba Pulse** turns the JKUAT Conduit weather station into two "
-            "decisions: *is my crop at risk of late blight*, and *when should "
-            "I spray*."
-        )
-        st.markdown(
-            "**Farmers** get the answer as an SMS in English or Kiswahili "
-            "&mdash; they do not open a dashboard during planting season."
-        )
-        st.markdown(
-            "**This dashboard is for extension officers, agrovets and "
-            "cooperative field teams** who advise many farmers and need the "
-            "reasoning behind each alert."
-        )
-        st.divider()
-
-        st.markdown("<div class='mlabel'>Data sources</div>",
-                    unsafe_allow_html=True)
-        for line in (
-            "**JKUAT Conduit weather station** &mdash; JHUB Africa / JKUAT",
-            "**Open-Meteo** &mdash; 7-day forecast",
-            "**ERA5 reanalysis** via the Open-Meteo archive &mdash; rainfall "
-            "cross-check",
-            "**Kenya Meteorological Department** &mdash; Oct 2025 advisory, "
-            "cited as context",
-        ):
-            st.markdown(f"- {line}")
-        st.divider()
-
-        st.markdown(f"[Source on GitHub]({REPO_URL})")
-        st.markdown(f"[README]({REPO_URL}#readme)")
-        st.markdown(
-            f"[Data quality report]({REPO_URL}/blob/main/docs/DATA_QUALITY.md)")
-        st.caption(
-            "Risk follows the Hutton criteria for potato and tomato late "
-            "blight. SMS runs in dry-run: nothing is actually sent."
-        )
+def render_findings() -> None:
+    """The four data-quality findings as icon cards."""
+    st.markdown(C.section(
+        "What we found in the station data",
+        "We did not trust the obvious field names. Three of these would have "
+        "produced confidently wrong advice."), unsafe_allow_html=True)
+    st.markdown(C.finding_cards([
+        ("rain", "Rain field captures only 6% of rainfall",
+         "The per-interval field rg1 recorded 18.6 mm against 301.8 mm actual "
+         "over OND 2025. The spray adviser would have believed it never rains. "
+         "We now derive rainfall by differencing the running daily total."),
+        ("droplet", "Rain gauge 2 is faulty",
+         "Its daily total resets about 21 times a day instead of once, "
+         "reconstructing to 4,365 mm in a ~300 mm season. It had been used to "
+         "fill gaps in gauge 1. It no longer is."),
+        ("clock", "Timestamps are UTC, not local",
+         "Kenya is UTC+3. Read naively, every overnight humid-hours count "
+         "shifts three hours and the daily boundary moves - silently. We "
+         "convert to Africa/Nairobi on ingest."),
+        ("thermometer", "Cross-checked against ERA5",
+         "Our reconstructed rainfall totals 301.8 mm against 268.6 mm from "
+         "ERA5 reanalysis - within 12% over 92 days. A credibility check, not "
+         "a calibration."),
+    ]), unsafe_allow_html=True)
 
 
 def main() -> None:
-    render_sidebar()
-
     status = get_observations(7)
     forecast = get_forecast()
 
@@ -885,36 +745,48 @@ def main() -> None:
     alert = alerts_mod.build_alert(risk, advice)
     decision = alerts_mod.AlertPolicy().decide(alert)
 
-    render_hero(risk, advice, status.is_demo)
+    render_hero(status, risk)
 
     tab_now, tab_week, tab_test = st.tabs(
-        ["Today", "This week", "Does it work?"])
+        ["🌱 Today", "🗓 This week", "✅ Does it work?"])
 
     with tab_now:
-        render_risk_card(risk, advice, status.is_demo)
-        render_metrics(risk, status.df, advice)
-        st.write("")
+        render_action(risk, advice)
+        render_tiles(risk, status.df, advice)
         render_freshness(status, forecast)
         with st.expander("Where this data comes from"):
             if status.attempts:
+                st.markdown("**What we tried, in order**")
                 for line in status.attempts:
                     st.write(f"- {line}")
-            render_data_quality_body()
+            st.markdown(
+                f"Station readings come from the **JKUAT Conduit station** "
+                f"(a reading every {config.STATION_INTERVAL_MINUTES} minutes); "
+                f"the forecast comes from **Open-Meteo**. We check the sensors "
+                f"rather than trusting them — the four faults we found, "
+                f"with numbers, are in the **Does it work?** tab and in "
+                f"[docs/DATA_QUALITY.md]({REPO_URL}/blob/main/docs/DATA_QUALITY.md)."
+            )
         st.divider()
         render_spray(advice)
         st.divider()
         render_sms_preview(alert, decision)
 
     with tab_week:
+        render_week(forecast_hourly)
+        st.divider()
         if forecast.ok:
             render_forecast_chart(forecast.df)
             render_outlook_table(forecast.df)
         else:
-            st.warning(f"Forecast unavailable: {forecast.error}")
+            st.markdown(C.freshness(
+                "stale", f"Forecast unavailable: {C.esc(forecast.error)}. The "
+                f"week ahead needs the Open-Meteo forecast; everything else on "
+                f"this page still works from station data.", "&#127782;"),
+                unsafe_allow_html=True)
 
         st.divider()
-        st.markdown("<div class='sect'>Recent station readings</div>",
-                    unsafe_allow_html=True)
+        st.markdown(C.section("Recent station readings"), unsafe_allow_html=True)
         if status.df.empty:
             st.info("No station readings to show.")
         else:
@@ -925,21 +797,23 @@ def main() -> None:
             rf = go.Figure()
             rf.add_trace(go.Scatter(
                 x=recent["timestamp"], y=recent["humidity_pct"],
-                name="Humidity", line=dict(color="#1565c0", width=2),
+                name="Humidity", line=dict(color="#2E7D4F", width=2.4),
                 hovertemplate="%{y:.0f}%<extra>Humidity</extra>"))
             rf.add_trace(go.Scatter(
                 x=recent["timestamp"], y=recent["temperature_c"],
-                name="Temperature", line=dict(color="#ef6c00", width=2),
+                name="Temperature", line=dict(color="#B3261E", width=2.4),
                 hovertemplate="%{y:.1f}°C<extra>Temperature</extra>"))
             rf.add_hline(
                 y=config.HUTTON_RH_THRESHOLD_PCT,
-                line=dict(color="#c62828", dash="dash", width=2),
+                line=dict(color="#B3261E", dash="dash", width=2),
                 annotation_text=f"{config.HUTTON_RH_THRESHOLD_PCT:.0f}% blight threshold",
                 annotation_position="top left",
-                annotation_font=dict(size=10, color="#c62828"))
+                annotation_font=dict(size=11, color="#B3261E"))
             style_fig(rf, 310, legend=True)
             st.plotly_chart(rf, width="stretch",
                             config={"displayModeBar": False})
+        st.divider()
+        render_station_card(status)
 
     with tab_test:
         with st.expander("Options"):
@@ -949,21 +823,17 @@ def main() -> None:
                  f"(1 Oct - 31 Dec 2025)",
                  "Full station archive (Jun 2025 - Sep 2026)"],
                 index=0,
-                help="The season view is the window quoted in the README. The "
-                     "full archive covers every day the station has recorded.",
+                help="The season view is the window quoted in the README.",
             )
         scope = ("season" if scope_label.startswith(config.BACKTEST_WINDOW["label"])
                  else "all")
         render_backtest(get_backtest(bt.DEFAULT_ALERT_HOUR, scope), scope)
         st.divider()
+        render_findings()
+        st.divider()
         render_era5_check(get_rain_validation())
 
-    st.divider()
-    st.caption(
-        f"Shamba Pulse &middot; Hack The Weather 2026 &middot; JHUB Africa / "
-        f"JKUAT. Station data from the JKUAT Conduit station; forecast and ERA5 "
-        f"from Open-Meteo. [Source]({REPO_URL})"
-    )
+    st.markdown(C.footer(REPO_URL), unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
