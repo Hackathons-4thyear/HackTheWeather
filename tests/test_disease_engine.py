@@ -499,3 +499,58 @@ def test_insufficient_data_produces_an_unknown_assessment():
     result = de.assess(df)
     assert result.level == de.UNKNOWN
     assert result.is_actionable is False
+
+
+# --------------------------------------------------------------------------
+# The trailing partial day must not kill the HIGH pathway
+# --------------------------------------------------------------------------
+
+def test_partial_today_does_not_break_the_hutton_run():
+    """The live case: assessing at 06:00, today has only 6 hours of data.
+
+    Treating that unjudgeable day as a break would make the run permanently
+    zero and HIGH would never fire in production.
+    """
+    df = make_days([
+        {"day": "2025-10-01", "humid_hours": 8, "min_temp": 14.0},
+        {"day": "2025-10-02", "humid_hours": 9, "min_temp": 14.0},
+        # "Today", 06:00: only hours 0-5 recorded.
+        {"day": "2025-10-03", "humid_hours": 4, "min_temp": 14.0,
+         "drop_hours": list(range(6, 24))},
+    ])
+    result = de.assess(df)
+    assert result.days[-1].is_hutton_day is None, "today should be unjudgeable"
+    assert result.consecutive_hutton_days == 2, "the run must survive today"
+    assert result.level == "HIGH"
+
+
+def test_only_one_trailing_partial_day_is_skipped():
+    """Two unjudged days at the end means an outage, not just 'today'.
+
+    Reaching back over it would present a stale run as current.
+    """
+    df = make_days([
+        {"day": "2025-10-01", "humid_hours": 8, "min_temp": 14.0},
+        {"day": "2025-10-02", "humid_hours": 9, "min_temp": 14.0},
+        {"day": "2025-10-03", "humid_hours": 4, "min_temp": 14.0,
+         "drop_hours": list(range(6, 24))},
+        {"day": "2025-10-04", "humid_hours": 4, "min_temp": 14.0,
+         "drop_hours": list(range(6, 24))},
+    ])
+    result = de.assess(df)
+    assert result.consecutive_hutton_days == 0
+    assert result.hutton_level != "HIGH"
+
+
+def test_mid_record_gap_still_breaks_the_run():
+    """Skipping the trailing day must not weaken the mid-gap rule."""
+    df = make_days([
+        {"day": "2025-10-01", "humid_hours": 8, "min_temp": 14.0},
+        {"day": "2025-10-02", "humid_hours": 8, "min_temp": 14.0,
+         "drop_hours": list(range(12))},          # unjudgeable, mid-record
+        {"day": "2025-10-03", "humid_hours": 8, "min_temp": 14.0},
+        {"day": "2025-10-04", "humid_hours": 4, "min_temp": 14.0,
+         "drop_hours": list(range(6, 24))},       # partial "today"
+    ])
+    result = de.assess(df)
+    assert result.consecutive_hutton_days == 1, "the mid gap must still break it"

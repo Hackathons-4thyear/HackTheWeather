@@ -291,15 +291,29 @@ def evaluate_days(df: pd.DataFrame) -> list[DayAssessment]:
 def count_consecutive_hutton(days: list[DayAssessment]) -> tuple[int, list[Date]]:
     """Length of the Hutton run ending on the most recent judged day.
 
-    A day with insufficient data BREAKS the run. We will not bridge a gap and
-    claim two consecutive Hutton days we did not actually observe.
+    THE TRAILING PARTIAL DAY IS SKIPPED, NOT TREATED AS A BREAK. When we assess
+    at 06:00, today has only six hours of data and is correctly unjudgeable.
+    Counting that as a break would make the run permanently zero and kill the
+    HIGH pathway entirely, because today is always partial in live use.
+
+    Exactly ONE trailing unjudged day is skipped. If the day before it is also
+    unjudged we return zero rather than reaching back over an outage and
+    presenting a stale run as current.
+
+    An unjudged day in the MIDDLE still breaks the run: we will not bridge a gap
+    and claim two consecutive Hutton days we did not observe.
     """
+    idx = len(days) - 1
+
+    # Skip "today", which is still in progress at assessment time.
+    if idx >= 0 and days[idx].is_hutton_day is None:
+        idx -= 1
+
     run: list[Date] = []
-    for d in reversed(days):
-        if d.is_hutton_day is True:
-            run.append(d.day)
-        else:
-            break
+    while idx >= 0 and days[idx].is_hutton_day is True:
+        run.append(days[idx].day)
+        idx -= 1
+
     run.reverse()
     return len(run), run
 

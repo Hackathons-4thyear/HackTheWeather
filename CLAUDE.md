@@ -100,6 +100,26 @@ review of the first live output, which offered "Mon 19:00 - Tue 08:00"):
 Window bounds are `start` inclusive, `end` EXCLUSIVE, so 09:00-17:00 is 8.0 h.
 Clipping can put either bound on a half hour.
 
+**Trailing partial day must not break the Hutton run.** When assessing at 06:00,
+"today" has ~6 hours and is correctly unjudgeable. Counting that as a break made
+the run permanently 0 and killed the HIGH pathway entirely in live use - found
+only when the backtest reported 0 Hutton days across a 90-day wet season.
+`count_consecutive_hutton` now skips exactly ONE trailing unjudged day. Two in a
+row means an outage, so the run returns 0 rather than presenting a stale run as
+current. A gap in the MIDDLE still breaks it.
+
+**Humid-hours coverage is asymmetric.** Observing 6 humid hours proves at least 6
+occurred however many hours were missed, so a positive finding stands regardless
+of coverage. Observing zero in 8 of 24 proves nothing about the other 16, so the
+LOW verdict - the only one telling a farmer to relax - requires real coverage and
+otherwise returns UNKNOWN.
+
+**Backtest has no lookahead**, asserted by tests that spy on every frame handed
+to the engine. Spray windows in the backtest are PERFECT-FORESIGHT (computed from
+the weather that actually followed, since no forecast archive exists) and are
+labelled as such everywhere they surface. Disease alerts use past observations
+only, exactly as they would live.
+
 ## Hard rules
 
 - **Real Conduit data must be visibly used — 25% of the judging score.**
