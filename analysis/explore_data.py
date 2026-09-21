@@ -37,7 +37,7 @@ def find_data_files(explicit: list[str]) -> list[Path]:
     if not config.DATA_DIR.exists():
         return []
     files: list[Path] = []
-    for pattern in ("*.csv", "*.xlsx", "*.xls", "*.json"):
+    for pattern in ("*.parquet", "*.csv", "*.xlsx", "*.xls", "*.json"):
         files.extend(sorted(config.DATA_DIR.glob(pattern)))
     return files
 
@@ -51,6 +51,8 @@ def load_any(path: Path) -> pd.DataFrame:
         return pd.read_excel(path)
     if suffix == ".json":
         return pd.read_json(path)
+    if suffix == ".parquet":
+        return pd.read_parquet(path)
     raise ValueError(f"unsupported file type: {suffix}")
 
 
