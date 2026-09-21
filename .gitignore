@@ -29,3 +29,7 @@ data/cache/
 # inspect the numbers without running anything.
 data/conduit_probe_*.json
 *.tmp
+
+# Devpost upload bundle - rebuilt on demand from git archive.
+# The PDF itself lives in docs/ and IS committed.
+submission/
