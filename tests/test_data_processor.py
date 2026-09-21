@@ -235,3 +235,96 @@ def test_hourly_keeps_gaps_visible_instead_of_zero_filling_rain():
     empty_hours = hourly[hourly["temperature_c"].isna()]
     assert len(empty_hours) > 0
     assert empty_hours["rain_mm"].isna().all(), "a data gap is not a dry hour"
+
+
+# --------------------------------------------------------------------------
+# Staleness - a successful fetch is not the same as fresh data
+# --------------------------------------------------------------------------
+
+def test_stale_data_is_flagged_even_when_the_fetch_succeeded():
+    """The API answering is not the same as the data being current.
+
+    The station publishes on a lag, so a healthy connection routinely returns
+    readings many hours old. Calling that "live" would be misleading.
+    """
+    from services import data_source as ds
+
+    fresh = pd.DataFrame({
+        "timestamp": [pd.Timestamp.now() - pd.Timedelta(minutes=20)],
+        "temperature_c": [20.0], "humidity_pct": [80.0],
+    })
+    old = pd.DataFrame({
+        "timestamp": [pd.Timestamp.now() - pd.Timedelta(hours=13)],
+        "temperature_c": [20.0], "humidity_pct": [80.0],
+    })
+
+    assert ds.DataStatus(source=ds.LIVE, df=fresh).is_stale is False
+    assert ds.DataStatus(source=ds.LIVE, df=old).is_stale is True
+
+
+def test_unknown_age_counts_as_stale():
+    """Better to warn wrongly than present unknown-age data as current."""
+    from services import data_source as ds
+    assert ds.DataStatus(source=ds.LIVE, df=pd.DataFrame()).is_stale is True
+
+
+def test_staleness_boundary_follows_config():
+    from services import data_source as ds
+    just_under = pd.DataFrame({
+        "timestamp": [pd.Timestamp.now()
+                      - pd.Timedelta(hours=config.STALE_AFTER_HOURS)
+                      + pd.Timedelta(minutes=5)],
+        "temperature_c": [20.0], "humidity_pct": [80.0],
+    })
+    just_over = pd.DataFrame({
+        "timestamp": [pd.Timestamp.now()
+                      - pd.Timedelta(hours=config.STALE_AFTER_HOURS)
+                      - pd.Timedelta(minutes=5)],
+        "temperature_c": [20.0], "humidity_pct": [80.0],
+    })
+    assert ds.DataStatus(source=ds.LIVE, df=just_under).is_stale is False
+    assert ds.DataStatus(source=ds.LIVE, df=just_over).is_stale is True
+
+
+# --------------------------------------------------------------------------
+# The API's todate bound is EXCLUSIVE
+# --------------------------------------------------------------------------
+
+def test_fetch_recent_asks_through_tomorrow():
+    """todate is exclusive on this endpoint, verified against the live API.
+
+    Requesting fromdate=D&todate=D+1 returns only day D. So including today
+    means asking through tomorrow - otherwise the newest day is silently
+    dropped from every live fetch.
+    """
+    from datetime import date, timedelta
+    from services import conduit_api
+
+    seen = {}
+
+    def fake_range(fromdate, todate, **kw):
+        seen["from"], seen["to"] = fromdate, todate
+        return conduit_api.ConduitResult(ok=True, rows=[])
+
+    original = conduit_api.fetch_range
+    conduit_api.fetch_range = fake_range
+    try:
+        conduit_api.fetch_recent(days=7)
+    finally:
+        conduit_api.fetch_range = original
+
+    assert seen["to"] == date.today() + timedelta(days=1)
+    assert seen["from"] == date.today() - timedelta(days=6)
+
+
+def test_empty_data_array_is_no_rows_not_a_parse_error():
+    """The station returns {"status":"success","data":[]} for an unlogged day.
+
+    Reporting that as an unrecognised shape would send us hunting for a parser
+    bug that does not exist.
+    """
+    from services.conduit_api import _extract_rows
+    rows, err = _extract_rows(
+        {"status": "success", "headers": ["ts", "rg1"], "data": []})
+    assert rows == []
+    assert err is None

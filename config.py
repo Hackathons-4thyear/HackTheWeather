@@ -39,6 +39,13 @@ LOCAL_TZ = ZoneInfo("Africa/Nairobi")
 # The station logs a reading every 15 minutes -> 4 readings per hour.
 STATION_INTERVAL_MINUTES = 15
 
+# How old the newest reading may be before we stop calling the data current.
+# The API answering successfully is NOT the same as the data being fresh: the
+# station publishes on a lag, so a healthy connection can still hand back
+# readings many hours old. Two hours is eight missed readings - well beyond
+# normal jitter, and enough to matter for an overnight humidity count.
+STALE_AFTER_HOURS = 2
+
 # --------------------------------------------------------------------------
 # Credentials (from .env only - see .env.example)
 # --------------------------------------------------------------------------

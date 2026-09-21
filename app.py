@@ -103,8 +103,18 @@ def get_backtest(alert_hour: int, scope: str) -> pd.DataFrame:
 
 def render_status_banner(status: ds.DataStatus, forecast: fc.ForecastResult) -> None:
     """Say plainly where every number on the page came from."""
-    if status.source == ds.LIVE:
+    if status.source == ds.LIVE and not status.is_stale:
         st.success(f"**Live station data** - {status.detail}", icon="📡")
+    elif status.source == ds.LIVE:
+        # The API answered, but the newest reading is old. Saying "live" here
+        # would be technically true and practically misleading.
+        st.warning(
+            f"**Station connected, but the newest reading is "
+            f"{status.age_text()}** ({status.latest:%a %d %b %H:%M}). "
+            f"The station publishes on a lag, so risk below is based on data "
+            f"up to that time, not on this minute. {status.detail}",
+            icon="🕒",
+        )
     elif status.source == ds.CACHED:
         st.warning(
             f"**Station is unreachable - showing cached history.** "

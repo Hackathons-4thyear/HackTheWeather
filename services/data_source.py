@@ -67,6 +67,19 @@ class DataStatus:
         latest = self.latest
         return None if latest is None else pd.Timestamp.now() - latest
 
+    @property
+    def is_stale(self) -> bool:
+        """Is the newest reading older than config.STALE_AFTER_HOURS?
+
+        Separate from `ok`: the fetch can succeed and still return old data.
+        Unknown age counts as stale - we would rather warn wrongly than
+        present unknown-age data as current.
+        """
+        age = self.age
+        if age is None:
+            return True
+        return age > pd.Timedelta(hours=config.STALE_AFTER_HOURS)
+
     def age_text(self) -> str:
         age = self.age
         if age is None:

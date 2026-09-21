@@ -71,6 +71,13 @@ def _extract_rows(payload: Any) -> tuple[list[dict[str, Any]], str | None]:
 
         for key in _CANDIDATE_ROW_KEYS:
             if key in payload:
+                # An EMPTY list is a valid answer meaning "no readings in this
+                # range" - the station returns {"status":"success","data":[]}
+                # for a date it has not logged yet. Returning it as an empty
+                # result rather than falling through to the unknown-shape
+                # branch keeps the error message honest.
+                if isinstance(payload[key], list):
+                    return [r for r in payload[key] if isinstance(r, dict)], None
                 inner, err = _extract_rows(payload[key])
                 if inner:
                     return inner, None
@@ -164,6 +171,20 @@ def fetch_range(
 
 
 def fetch_recent(days: int = 7, **kwargs: Any) -> ConduitResult:
-    """Convenience wrapper: the last `days` days up to today (inclusive)."""
+    """The last `days` days, including whatever exists for the current day.
+
+    `todate` is EXCLUSIVE on this endpoint - verified 2026-09-21: requesting
+    fromdate=2026-09-20&todate=2026-09-21 returns only the 2026-09-20 UTC day,
+    ending 23:52 UTC. Asking through TOMORROW is therefore what includes today.
+
+    Note the station publishes on a lag: at 10:41 UTC the current UTC day was
+    still empty, so the freshest reading available is normally the end of the
+    previous UTC day. That is why the dashboard reports data age explicitly
+    rather than calling any successful fetch "live and current".
+    """
     today = date.today()
-    return fetch_range(today - timedelta(days=days - 1), today, **kwargs)
+    return fetch_range(
+        today - timedelta(days=days - 1),
+        today + timedelta(days=1),   # exclusive bound - include today
+        **kwargs,
+    )
