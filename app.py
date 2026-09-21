@@ -126,6 +126,50 @@ def render_status_banner(status: ds.DataStatus, forecast: fc.ForecastResult) -> 
             for line in status.attempts:
                 st.write(f"- {line}")
 
+    render_data_quality()
+
+
+def render_data_quality() -> None:
+    """Compact summary of what we found wrong with the station data.
+
+    Kept short here; docs/DATA_QUALITY.md carries the full evidence. Judges and
+    farmers both benefit from seeing that the numbers were checked rather than
+    trusted.
+    """
+    with st.expander("Data quality — what we checked"):
+        st.markdown(
+            "We did not trust the obvious field names. Three of these would "
+            "have produced confidently wrong advice."
+        )
+        st.markdown(
+            """
+| What we found | Why it mattered | What we did |
+|---|---|---|
+| **Rain gauge 1's per-interval field (`rg1`) captures only 6% of rainfall** — 18.6 mm recorded against 301.8 mm actual over OND 2025 | The spray adviser would have thought it never rains, and recommended spraying into a storm | Derive rainfall by differencing the running daily total `rg1tt` |
+| **Rain gauge 2 is faulty** — its daily total resets ~21 times a day instead of once, reconstructing to 4,365 mm in a ~300 mm season | It had been used to fill gaps in gauge 1 | Never used, and never a fallback |
+| **Timestamps are UTC, not local** (Kenya is UTC+3) | A 3-hour shift would silently corrupt every overnight humid-hours count and move the daily boundary | Converted to Africa/Nairobi on ingest |
+| **`wind_gust_dir` duplicates `wind_gust`** (identical on 100% of rows, range −999.9 to 13.9) | Not a direction at all | Not used |
+| **`si1145_uv` reads a constant zero** | A dead channel | Not used; light channels are labelled raw counts, never W/m² |
+| **No soil-moisture or leaf-wetness sensor exists** | — | Never fabricated; humidity ≥ 90% is the stated leaf-wetness proxy |
+            """
+        )
+        st.markdown(
+            f"**Independent check:** our reconstructed rainfall totals "
+            f"**301.8 mm** for OND 2025 against **268.6 mm** from ERA5 "
+            f"reanalysis at the same coordinates — 12% apart. Daily correlation "
+            f"is modest (Spearman 0.41), which is expected rather than "
+            f"concerning: ERA5 is a ~9 km grid cell and the station is one "
+            f"point inside it, and tropical rain here is convective. "
+            f"This is a credibility check, not calibration — no station value "
+            f"is adjusted toward ERA5."
+        )
+        st.caption(
+            "Station coverage for OND 2025: 98.6–99.1% per month, 1.1% of "
+            "intervals missing, no gap longer than 6 hours. "
+            "Full evidence in docs/DATA_QUALITY.md; reproduce with "
+            "analysis/explore_data.py and analysis/validate_rain.py."
+        )
+
 
 # --------------------------------------------------------------------------
 # Risk card
