@@ -47,15 +47,75 @@ _DAY_WORDS = {
     "sw": {"today": "leo", "tomorrow": "kesho"},
 }
 
-# Abbreviated weekday names, used only beyond tomorrow.
+# Weekday names, used only beyond tomorrow (today/tomorrow are shorter AND
+# clearer). Kiswahili uses the FULL forms - the 3-letter abbreviations we tried
+# first are not something a farmer would recognise at a glance.
 _WEEKDAYS = {
     "en": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-    # [REVIEW] Kiswahili weekdays abbreviated to 3 letters to fit an SMS.
-    # Full forms: Jumatatu, Jumanne, Jumatano, Alhamisi, Ijumaa, Jumamosi,
-    # Jumapili. Ask the reviewer whether these short forms read naturally or
-    # whether a date like "23/9" would be clearer to a farmer.
-    "sw": ["Jtt", "Jnn", "Jtn", "Alh", "Ijm", "Jms", "Jpl"],
+    "sw": ["Jumatatu", "Jumanne", "Jumatano", "Alhamisi", "Ijumaa",
+           "Jumamosi", "Jumapili"],
 }
+
+
+# --------------------------------------------------------------------------
+# Kiswahili time
+# --------------------------------------------------------------------------
+# East African Kiswahili counts hours from DAWN, not from midnight. The day
+# starts at 06:00, which is "saa 12", and 07:00 is "saa 1". So a farmer told
+# "saa 3" understands 09:00, and being told "09:00" in a Kiswahili sentence
+# reads as a foreign convention.
+#
+#   clock 06:00 -> saa 12 asubuhi        clock 15:00 -> saa 9 mchana
+#   clock 07:00 -> saa 1 asubuhi         clock 17:00 -> saa 11 jioni
+#   clock 12:00 -> saa 6 mchana          clock 00:00 -> saa 6 usiku
+#
+# Period words: asubuhi (morning), mchana (midday/afternoon), jioni (evening),
+# usiku (night).
+
+# [REVIEW] Period boundaries. These are the common Kenyan split, but the
+# asubuhi/mchana and mchana/jioni edges vary by speaker.
+_SW_PERIODS = (
+    (6, 12, "asubuhi"),    # 06:00-11:59
+    (12, 16, "mchana"),    # 12:00-15:59
+    (16, 19, "jioni"),     # 16:00-18:59
+)
+_SW_NIGHT = "usiku"        # 19:00-05:59
+
+
+def swahili_period(hour: int) -> str:
+    """The Kiswahili word for the part of the day a clock hour falls in."""
+    for lo, hi, word in _SW_PERIODS:
+        if lo <= hour < hi:
+            return word
+    return _SW_NIGHT
+
+
+def to_swahili_time(hour: int, minute: int = 0) -> str:
+    """Convert a 24-hour clock time to spoken Kiswahili time.
+
+    >>> to_swahili_time(9, 0)
+    'saa 3 asubuhi'
+    >>> to_swahili_time(17, 0)
+    'saa 11 jioni'
+    >>> to_swahili_time(6, 30)
+    'saa 12 na nusu asubuhi'
+    """
+    if not 0 <= hour <= 23:
+        raise ValueError(f"hour must be 0-23, got {hour}")
+    if not 0 <= minute <= 59:
+        raise ValueError(f"minute must be 0-59, got {minute}")
+
+    # Count from 06:00. The 12 o'clock slot is written 12, not 0.
+    swahili_hour = (hour - 6) % 12 or 12
+
+    if minute == 0:
+        mins = ""
+    elif minute == 30:
+        mins = " na nusu"            # [REVIEW] "and a half" - standard
+    else:
+        mins = f" na dakika {minute}"
+
+    return f"saa {swahili_hour}{mins} {swahili_period(hour)}"
 
 
 def relative_day(ts: pd.Timestamp, now: pd.Timestamp, lang: str) -> str:
@@ -71,8 +131,15 @@ def relative_day(ts: pd.Timestamp, now: pd.Timestamp, lang: str) -> str:
 
 def format_window(start: pd.Timestamp, end: pd.Timestamp,
                   now: pd.Timestamp, lang: str) -> str:
-    """'tomorrow 06:30-09:00' - a time range a farmer can act on."""
+    """A time range a farmer can act on, in that language's own convention.
+
+    English: 'tomorrow 06:30-09:00'
+    Kiswahili: 'kesho saa 12 na nusu asubuhi-saa 3 asubuhi'
+    """
     day = relative_day(start, now, lang)
+    if lang == "sw":
+        return (f"{day} {to_swahili_time(start.hour, start.minute)}"
+                f"-{to_swahili_time(end.hour, end.minute)}")
     return f"{day} {start:%H:%M}-{end:%H:%M}"
 
 
@@ -97,15 +164,15 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
                       "Spray {window}."),
         },
         "sw": {
-            # [REVIEW] "baka" is the common Kenyan term for blight on tomato
-            # and potato. Alternative: "ukungu" (fungus/mildew), or farmers may
-            # simply say "blight". Ask which the Juja/Kiambu area uses.
-            # [REVIEW] "unyevu" = humidity/dampness. "Hatari kubwa" = big danger.
-            "full": ("{brand}: Hatari KUBWA ya baka kwa {crop}. Unyevu ulikaa "
-                     "juu ya {rh}% kwa saa {hours}, siku {days} mfululizo. "
-                     "Nyunyiza dawa {window}."),
-            "short": ("{brand}: Hatari KUBWA ya baka, {crop}. Saa {hours} za "
-                      "unyevu. Nyunyiza {window}."),
+            # [REVIEW] "baka chelewa" = late blight. "baka" alone is too vague
+            # (it can mean any spot or blemish), so we name the disease fully.
+            # [REVIEW] Durations use "masaa" and clock times use "saa", so
+            # "masaa 11" (for 11 hours) cannot be misread as "saa 11" (17:00).
+            "full": ("{brand}: HATARI KUBWA ya baka chelewa, {crop}. Unyevu "
+                     "juu ya {rh}% masaa {hours}, siku {days}. "
+                     "Nyunyiza {window}."),
+            "short": ("{brand}: Baka chelewa, HATARI KUBWA, {crop}. "
+                      "Nyunyiza {window}."),
         },
     },
 
@@ -120,11 +187,11 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
         },
         "sw": {
             # [REVIEW] "hakuna muda mzuri wa kunyunyiza" = no good time to spray.
-            "full": ("{brand}: Hatari KUBWA ya baka kwa {crop}. Unyevu juu ya "
-                     "{rh}% kwa saa {hours}. Hakuna muda mzuri wa kunyunyiza "
-                     "bado - mvua au upepo. Tutakujulisha."),
-            "short": ("{brand}: Hatari KUBWA ya baka, {crop}. Hakuna muda wa "
-                      "kunyunyiza bado. Tutakujulisha."),
+            "full": ("{brand}: HATARI KUBWA ya baka chelewa, {crop}. Unyevu "
+                     "juu ya {rh}% masaa {hours}. Hakuna muda mzuri wa "
+                     "kunyunyiza bado - mvua au upepo. Tutakujulisha."),
+            "short": ("{brand}: HATARI KUBWA ya baka chelewa, {crop}. Hakuna "
+                      "muda wa kunyunyiza bado."),
         },
     },
 
@@ -139,11 +206,10 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
         },
         "sw": {
             # [REVIEW] "inaongezeka" = is increasing. "Kagua" = inspect/check.
-            "full": ("{brand}: Hatari ya baka inaongezeka kwa {crop}. Unyevu "
-                     "juu ya {rh}% kwa saa {hours}. Kagua shamba lako. Muda "
-                     "mzuri wa kunyunyiza {window}."),
-            "short": ("{brand}: Hatari ya baka inaongezeka, {crop}. Kagua "
-                      "shamba. Nyunyiza {window}."),
+            "full": ("{brand}: Baka chelewa inaongezeka, {crop}. Unyevu juu ya "
+                     "{rh}% masaa {hours}. Kagua shamba. Nyunyiza {window}."),
+            "short": ("{brand}: Baka chelewa inaongezeka, {crop}. "
+                      "Nyunyiza {window}."),
         },
     },
 
@@ -156,11 +222,11 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
                       "spray window yet."),
         },
         "sw": {
-            "full": ("{brand}: Hatari ya baka inaongezeka kwa {crop}. Unyevu "
-                     "juu ya {rh}% kwa saa {hours}. Kagua shamba. Hakuna muda "
-                     "wa kunyunyiza bado."),
-            "short": ("{brand}: Hatari ya baka inaongezeka, {crop}. Kagua "
-                      "shamba. Hakuna muda wa kunyunyiza."),
+            "full": ("{brand}: Baka chelewa inaongezeka, {crop}. Unyevu juu ya "
+                     "{rh}% masaa {hours}. Kagua shamba lako. Hakuna muda wa "
+                     "kunyunyiza bado."),
+            "short": ("{brand}: Baka chelewa inaongezeka, {crop}. Kagua "
+                      "shamba lako."),
         },
     },
 
@@ -175,10 +241,10 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
         "sw": {
             # [REVIEW] "ndogo" = small/low. "Hakuna haja ya kunyunyiza" = no
             # need to spray.
-            "full": ("{brand}: Hatari ya baka ni NDOGO kwa {crop}. Hali ni "
-                     "kavu mno kwa ugonjwa. Hakuna haja ya kunyunyiza leo."),
-            "short": ("{brand}: Hatari ya baka NDOGO, {crop}. Hakuna haja ya "
-                      "kunyunyiza leo."),
+            "full": ("{brand}: Hatari ya baka chelewa ni NDOGO, {crop}. Hali "
+                     "ni kavu mno kwa ugonjwa. Hakuna haja ya kunyunyiza leo."),
+            "short": ("{brand}: Baka chelewa hatari NDOGO, {crop}. Hakuna haja "
+                      "ya kunyunyiza leo."),
         },
     },
 
@@ -192,10 +258,8 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
         "sw": {
             # [REVIEW] "majani makavu" = dry leaves. "upepo" = wind.
             "full": ("{brand}: Hali nzuri ya kunyunyiza {window}. Hakuna mvua, "
-                     "upepo {wind} m/s, majani makavu. Nafasi bora kwa siku 3 "
-                     "zijazo."),
-            "short": ("{brand}: Hali nzuri ya kunyunyiza {window}. Upepo "
-                      "{wind} m/s."),
+                     "upepo {wind} m/s, majani makavu."),
+            "short": ("{brand}: Nyunyiza {window}. Upepo {wind} m/s."),
         },
     },
 
@@ -209,13 +273,13 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
                       "now."),
         },
         "sw": {
-            # [REVIEW] "takwimu" = data. "kituo cha hali ya hewa" = weather
-            # station. This may be too formal - a simpler phrasing may land
-            # better with farmers.
+            # [REVIEW] "takwimu" = data. This may be too formal for farmers -
+            # ask whether a plainer phrasing would land better.
             "full": ("{brand}: Hakuna takwimu za kutosha kupima hatari ya baka "
-                     "sasa. Kituo cha hali ya hewa kina mapengo. Tutakujulisha."),
+                     "chelewa sasa. Kituo cha hali ya hewa kina mapengo. "
+                     "Tutakujulisha."),
             "short": ("{brand}: Hakuna takwimu za kutosha kupima hatari ya "
-                      "baka sasa."),
+                      "baka chelewa sasa."),
         },
     },
 }
@@ -234,14 +298,26 @@ CROPS = {
 REVIEW_NOTES = """
 Questions for the native Kiswahili reviewer
 -------------------------------------------
-1. "baka" for late blight - is this what farmers around Juja/Kiambu actually
-   say? Alternatives heard elsewhere: "ukungu", or the English "blight".
-2. "viazi" for potato - does it read as Irish potato here, or will farmers
-   read sweet potato? Is "viazi mviringo" worth the extra 9 characters?
-3. Weekday abbreviations Jtt/Jnn/Jtn/Alh/Ijm/Jms/Jpl - natural, or would a
-   numeric date like "23/9" be clearer?
-4. "Nyunyiza dawa" vs "piga dawa" for spraying - which is more common locally?
-5. "Hatari KUBWA" in caps for emphasis - does shouting read as urgent or rude?
-6. Register overall: is this the plain spoken Kiswahili a smallholder uses, or
+1. KISWAHILI TIME is used throughout, counted from dawn: 06:00 = "saa 12",
+   07:00 = "saa 1", 09:00 = "saa 3 asubuhi", 17:00 = "saa 11 jioni". Please
+   check (a) the hour arithmetic, (b) the period words, and (c) the period
+   BOUNDARIES we chose: asubuhi 06:00-11:59, mchana 12:00-15:59,
+   jioni 16:00-18:59, usiku 19:00-05:59. The mchana/jioni edge especially -
+   some speakers put it at 17:00 rather than 16:00.
+2. To avoid "saa 11" (17:00) being misread as "11 hours", DURATIONS are written
+   "masaa 11" and clock times "saa 11". Does that distinction actually work in
+   speech, or does it need rewording entirely (e.g. "kwa muda wa masaa 11")?
+3. "baka chelewa" for late blight - is this what farmers around Juja/Kiambu
+   actually say? Alternatives heard elsewhere: "ukungu", or the English
+   "blight". We moved off bare "baka" because it can mean any spot or blemish.
+4. "viazi" for potato. WE ASSUME THIS READS AS IRISH POTATO, the crop late
+   blight affects, not sweet potato (viazi vitamu). If that assumption is wrong
+   the alerts are aimed at the wrong crop - "viazi mviringo" is unambiguous but
+   costs 9 characters. Please confirm which is safe.
+5. Weekday names are now the full forms (Jumatatu, Jumanne, Jumatano, Alhamisi,
+   Ijumaa, Jumamosi, Jumapili). "leo"/"kesho" are used for today/tomorrow.
+6. "Nyunyiza dawa" vs "piga dawa" for spraying - which is more common locally?
+7. "HATARI KUBWA" in caps for emphasis - does shouting read as urgent or rude?
+8. Register overall: is this the plain spoken Kiswahili a smallholder uses, or
    has it drifted into Kiswahili sanifu that sounds like a government notice?
 """

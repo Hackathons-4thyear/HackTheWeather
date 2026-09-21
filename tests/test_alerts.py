@@ -9,6 +9,7 @@ No test here touches the network. The sender is exercised against a stub.
 
 from __future__ import annotations
 
+import functools
 import sys
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import config  # noqa: E402
 from services import alerts, messages as msg, sms_sender  # noqa: E402
 from services import disease_engine as de  # noqa: E402
 from services import spray_window as sw  # noqa: E402
+from services import spray_window as sw_mod  # noqa: E402
 from tests.test_disease_engine import make_days  # noqa: E402
 
 NOW = pd.Timestamp("2025-10-08 07:00:00")
@@ -71,23 +73,88 @@ def risk_unknown() -> de.RiskAssessment:
 # The 160-character requirement
 # --------------------------------------------------------------------------
 
+def reachable_minutes() -> tuple[int, ...]:
+    """Minute values a spray window can actually start or end on.
+
+    Windows sit on whole hours, except where daylight clipping trims them to
+    SPRAY_DAYLIGHT_START/END. So the minute is 0 or one of those two - derived
+    from config rather than hardcoded, so that moving the daylight bounds to an
+    awkward time re-tests the templates automatically.
+    """
+    return tuple(sorted({0,
+                         config.SPRAY_DAYLIGHT_START.minute,
+                         config.SPRAY_DAYLIGHT_END.minute}))
+
+
+@functools.lru_cache(maxsize=None)
+def longest_window_for(lang: str) -> str:
+    """The longest string format_window can actually produce in this language.
+
+    Computed rather than hardcoded, because Kiswahili time is far longer than
+    a 24-hour clock ("Jumamosi saa 12 na nusu asubuhi-..." vs "Sat 06:30-10:00")
+    and hardcoding one language's worst case would silently under-test the other.
+    """
+    now = pd.Timestamp("2025-10-01 06:00")
+    base = pd.Timestamp("2025-10-01")
+    minutes = reachable_minutes()
+    worst = ""
+    for day_offset in (0, 1, 3):          # today / tomorrow / weekday name
+        for h1 in range(24):
+            for m1 in minutes:
+                for h2 in range(24):
+                    for m2 in minutes:
+                        start = base + pd.Timedelta(days=day_offset, hours=h1, minutes=m1)
+                        end = base + pd.Timedelta(days=day_offset, hours=h2, minutes=m2)
+                        text = msg.format_window(start, end, now, lang)
+                        if len(text) > len(worst):
+                            worst = text
+    return worst
+
+
+def test_spray_windows_only_land_on_reachable_minutes():
+    """Underpins the worst-case budget above.
+
+    If a window could end on an arbitrary minute, "saa 3 na dakika 47 asubuhi"
+    would blow the SMS budget. Windows are built on whole hours and clipped to
+    the daylight bounds, so only those minutes occur.
+    """
+    from tests.test_spray_window import make_forecast
+    advice = sw_mod.find_windows(make_forecast(hours=72),
+                                 now=pd.Timestamp("2025-10-01 00:00"))
+    assert advice.windows
+    allowed = set(reachable_minutes())
+    for w in advice.windows:
+        assert w.start.minute in allowed, f"unexpected start minute {w.start}"
+        assert w.end.minute in allowed, f"unexpected end minute {w.end}"
+
+
 @pytest.mark.parametrize("kind", sorted(msg.TEMPLATES))
 @pytest.mark.parametrize("lang", msg.LANGUAGES)
 @pytest.mark.parametrize("variant", ["full", "short"])
 def test_every_template_fits_one_sms_segment(kind, lang, variant):
-    """Rendered with realistically long values, nothing may exceed 160 chars."""
+    """Rendered with worst-case values, nothing may exceed 160 chars."""
     text = msg.TEMPLATES[kind][lang][variant].format(
         brand=msg.BRAND,
         crop=msg.CROPS[lang]["both"],
         rh="90",
-        hours="24",                      # widest plausible hour count
-        days="14",                       # widest plausible day run
-        window="Jumatano 06:30-10:00",   # a long, unabbreviated day name
+        hours="24",                       # widest plausible hour count
+        days="14",                        # widest plausible day run
+        window=longest_window_for(lang),  # this language's true worst case
         wind="2.5",
     )
     assert len(text) <= config.SMS_MAX_CHARS, (
         f"{kind}/{lang}/{variant} is {len(text)} chars: {text}"
     )
+
+
+def test_kiswahili_windows_are_much_longer_than_english_ones():
+    """Guards the assumption behind the template budget.
+
+    If Kiswahili time ever stopped being the longer form, the SW templates
+    would have slack they do not need - and more importantly, if EN ever grew
+    longer, its templates would need re-checking against a new worst case.
+    """
+    assert len(longest_window_for("sw")) > len(longest_window_for("en"))
 
 
 @pytest.mark.parametrize("lang", msg.LANGUAGES)
@@ -191,7 +258,7 @@ def test_distant_day_uses_a_weekday_name():
     today = pd.Timestamp("2025-10-08 07:00")     # Wednesday
     far = today + pd.Timedelta(days=3)           # Saturday
     assert msg.relative_day(far, today, "en") == "Sat"
-    assert msg.relative_day(far, today, "sw") == "Jms"
+    assert msg.relative_day(far, today, "sw") == "Jumamosi"
 
 
 def test_window_formatting_is_actionable():
@@ -392,3 +459,131 @@ def test_send_alert_can_send_either_language(monkeypatch, capsys, lang):
     result = sms_sender.send_alert(alert, "0712345678", lang=lang)
     assert result.ok
     assert alert.sms_for(lang) in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------
+# Kiswahili time - counted from dawn, not from midnight
+# --------------------------------------------------------------------------
+
+def test_swahili_time_anchors():
+    """The two anchors that define the system: 06:00 is saa 12, 07:00 is saa 1."""
+    assert msg.to_swahili_time(6, 0) == "saa 12 asubuhi"
+    assert msg.to_swahili_time(7, 0) == "saa 1 asubuhi"
+
+
+def test_swahili_time_worked_examples():
+    assert msg.to_swahili_time(9, 0) == "saa 3 asubuhi"
+    assert msg.to_swahili_time(12, 0) == "saa 6 mchana"
+    assert msg.to_swahili_time(15, 0) == "saa 9 mchana"
+    assert msg.to_swahili_time(17, 0) == "saa 11 jioni"
+    assert msg.to_swahili_time(18, 0) == "saa 12 jioni"
+    assert msg.to_swahili_time(19, 0) == "saa 1 usiku"
+    assert msg.to_swahili_time(0, 0) == "saa 6 usiku"
+
+
+@pytest.mark.parametrize("hour", range(24))
+def test_swahili_hour_number_is_always_one_to_twelve(hour):
+    """Never 'saa 0' and never 'saa 13'."""
+    text = msg.to_swahili_time(hour, 0)
+    number = int(text.split()[1])
+    assert 1 <= number <= 12, text
+
+
+@pytest.mark.parametrize("hour", range(24))
+def test_every_hour_gets_a_period_word(hour):
+    text = msg.to_swahili_time(hour, 0)
+    assert any(p in text for p in ("asubuhi", "mchana", "jioni", "usiku")), text
+
+
+def test_swahili_clock_advances_by_one_each_hour():
+    """Consecutive hours must differ by exactly one, wrapping 12 -> 1."""
+    numbers = [int(msg.to_swahili_time(h, 0).split()[1]) for h in range(24)]
+    for a, b in zip(numbers, numbers[1:]):
+        assert b == (a % 12) + 1, f"{a} -> {b} is not consecutive"
+
+
+@pytest.mark.parametrize("hour", range(24))
+def test_half_hours(hour):
+    """Half past inserts 'na nusu' between the hour number and the period."""
+    number = int(msg.to_swahili_time(hour, 0).split()[1])
+    period = msg.swahili_period(hour)
+    assert msg.to_swahili_time(hour, 30) == f"saa {number} na nusu {period}"
+
+
+def test_half_past_reads_naturally():
+    assert msg.to_swahili_time(6, 30) == "saa 12 na nusu asubuhi"
+    assert msg.to_swahili_time(18, 30) == "saa 12 na nusu jioni"
+
+
+def test_other_minutes_are_spelled_out():
+    assert msg.to_swahili_time(9, 15) == "saa 3 na dakika 15 asubuhi"
+
+
+def test_period_boundaries():
+    assert msg.swahili_period(5) == "usiku"
+    assert msg.swahili_period(6) == "asubuhi"
+    assert msg.swahili_period(11) == "asubuhi"
+    assert msg.swahili_period(12) == "mchana"
+    assert msg.swahili_period(15) == "mchana"
+    assert msg.swahili_period(16) == "jioni"
+    assert msg.swahili_period(18) == "jioni"
+    assert msg.swahili_period(19) == "usiku"
+
+
+def test_invalid_times_are_rejected():
+    with pytest.raises(ValueError):
+        msg.to_swahili_time(24, 0)
+    with pytest.raises(ValueError):
+        msg.to_swahili_time(-1, 0)
+    with pytest.raises(ValueError):
+        msg.to_swahili_time(9, 60)
+
+
+def test_swahili_window_uses_swahili_time_not_clock_time():
+    """The example from review: 09:00-17:00 must not appear as digits."""
+    text = msg.format_window(pd.Timestamp("2025-10-09 09:00"),
+                             pd.Timestamp("2025-10-09 17:00"),
+                             pd.Timestamp("2025-10-08 07:00"), "sw")
+    assert text == "kesho saa 3 asubuhi-saa 11 jioni"
+    assert "09:00" not in text and "17:00" not in text
+
+
+def test_english_window_still_uses_clock_time():
+    text = msg.format_window(pd.Timestamp("2025-10-09 09:00"),
+                             pd.Timestamp("2025-10-09 17:00"),
+                             pd.Timestamp("2025-10-08 07:00"), "en")
+    assert text == "tomorrow 09:00-17:00"
+
+
+# --------------------------------------------------------------------------
+# Kiswahili wording
+# --------------------------------------------------------------------------
+
+def test_blight_is_named_fully_as_baka_chelewa():
+    """'baka' alone is too vague - it can mean any spot or blemish."""
+    for kind in ("blight_high", "blight_moderate", "blight_low"):
+        for variant in ("full", "short"):
+            text = msg.TEMPLATES[kind]["sw"][variant]
+            assert "baka chelewa" in text.lower(), f"{kind}/{variant}: {text}"
+
+
+def test_no_bare_baka_without_chelewa():
+    for kind, langs in msg.TEMPLATES.items():
+        for variant in ("full", "short"):
+            text = langs["sw"][variant].lower()
+            for part in text.split("baka")[1:]:
+                assert part.lstrip().startswith("chelewa"), f"{kind}/{variant}: {text}"
+
+
+def test_durations_use_masaa_so_they_cannot_be_read_as_clock_times():
+    """'saa 11' means 17:00. A duration of 11 hours must read 'masaa 11'."""
+    for kind, langs in msg.TEMPLATES.items():
+        text = langs["sw"]["full"]
+        if "{hours}" in text:
+            assert "masaa {hours}" in text, f"{kind} uses a clock-ambiguous form: {text}"
+
+
+def test_weekdays_are_full_words_not_abbreviations():
+    for name in msg._WEEKDAYS["sw"]:
+        assert len(name) > 3, f"{name} is an abbreviation"
+        assert name.startswith(("Juma", "Alh", "Ijum")), name
