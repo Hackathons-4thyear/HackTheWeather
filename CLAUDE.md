@@ -81,10 +81,24 @@ tests in `tests/test_disease_engine.py`.
 exactly when the humid hours would have happened, so guessing biases toward false
 confidence.
 
-**Open question - overnight spray windows:** window detection is physically
-correct but can return e.g. "Mon 19:00 - Tue 08:00", implying a 3am spray.
-Ranking already de-prioritises it via `SPRAY_PREFERRED_HOURS`. Not yet decided
-whether to hard-limit windows to daylight.
+**Spray windows are daylight-only, and wet leaves veto an hour** (decided after
+review of the first live output, which offered "Mon 19:00 - Tue 08:00"):
+
+- Runs are **clipped** to `SPRAY_DAYLIGHT_START`-`SPRAY_DAYLIGHT_END`
+  (06:30-18:30), not discarded, so that overnight example becomes
+  "Tue 06:30-08:00" if the morning tail still qualifies.
+- An hour with RH >= `SPRAY_MAX_HUMIDITY_PCT` is rejected: dew dilutes the spray
+  and makes it run off. That constant **references** `HUTTON_RH_THRESHOLD_PCT`
+  rather than copying the number, so the two can never drift apart. In practice
+  it pushes morning windows to start after the dew burns off.
+- `SPRAY_MIN_WINDOW_HOURS` (2) is applied **after** clipping and the wet-leaf
+  veto, so a window trimmed below 2 h is dropped, not offered.
+- **Only the spraying is daylight-limited.** The 6-hour rain-free requirement is
+  still checked against the full forecast including night hours - rain at 2am
+  still washes off a 7pm spray.
+
+Window bounds are `start` inclusive, `end` EXCLUSIVE, so 09:00-17:00 is 8.0 h.
+Clipping can put either bound on a half hour.
 
 ## Hard rules
 

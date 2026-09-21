@@ -3,20 +3,27 @@
 An hour is SPRAYABLE when all of these hold:
   * it is not raining that hour (<= the trace threshold),
   * it will not rain for the next SPRAY_DRY_HOURS_REQUIRED hours, so the
-    fungicide has time to become rain-fast instead of washing straight off, and
+    fungicide has time to become rain-fast instead of washing straight off,
   * wind sits inside SPRAY_WIND_MIN_MS..SPRAY_WIND_MAX_MS - calm air lets
-    droplets hang and drift unpredictably, strong wind blows them off target.
+    droplets hang and drift unpredictably, strong wind blows them off target,
+  * humidity is below SPRAY_MAX_HUMIDITY_PCT, because dew or fog on the leaf
+    dilutes the spray and makes it run off, and
+  * the hour falls in daylight - nobody sprays at 3am.
 
-Consecutive sprayable hours merge into a window. Windows shorter than
-SPRAY_WINDOW_MIN_HOURS are dropped - not worth mixing a tank for.
+Consecutive sprayable hours merge into a run, the run is CLIPPED to daylight
+(rather than thrown away, so an overnight stretch can still yield its morning
+tail), and anything left shorter than SPRAY_MIN_WINDOW_HOURS is dropped.
 
-Windows are then ranked, preferring early morning and late afternoon (less
-evaporation loss, fewer active pollinators) and wind near the middle of the
-usable band.
+Windows are ranked preferring the cooler parts of the day and wind near the
+middle of the usable band.
 
-Every window carries plain-language reasons, and every REJECTED hour records
-why it was rejected, so the dashboard can explain "no windows found" honestly
-instead of just showing an empty list.
+IMPORTANT ASYMMETRY: only the SPRAYING must happen in daylight. The 6-hour
+rain-free requirement after spraying is checked against the full forecast,
+night hours included - rain at 2am still washes off a 7pm spray.
+
+Every window carries plain-language reasons, and every rejected hour records
+why, so the dashboard can explain "no windows found" honestly instead of just
+showing an empty list.
 """
 
 from __future__ import annotations
@@ -27,27 +34,45 @@ import pandas as pd
 
 import config
 
+# Rejection reason labels, used as dict keys in the tally the UI shows.
+R_RAINING_NOW = "raining now"
+R_RAIN_HOUR = "rain during the hour"
+R_RAIN_SOON = f"rain expected within {config.SPRAY_DRY_HOURS_REQUIRED}h"
+R_TRUNCATED = "forecast ends too soon to confirm"
+R_NO_WIND = "no wind reading"
+R_CALM = "too calm"
+R_WINDY = "too windy"
+R_WET_LEAF = "leaves likely wet"
+R_NIGHT = "outside daylight"
+R_SHORT = "window too short"
+
 
 @dataclass
 class SprayWindow:
-    """One usable stretch of time for spraying."""
+    """One usable stretch of time for spraying.
+
+    `start` is inclusive and `end` is EXCLUSIVE, so a window covering 09:00
+    through 16:59 is start=09:00, end=17:00, duration_hours=8.0. Clipping to
+    daylight can put either bound on a half hour (e.g. 06:30).
+    """
 
     start: pd.Timestamp
-    end: pd.Timestamp          # inclusive end hour
-    duration_hours: int
+    end: pd.Timestamp
+    duration_hours: float
     mean_wind_ms: float
     max_wind_ms: float
     min_wind_ms: float
-    dry_hours_after: float     # how long it stays dry from the window's end
+    max_humidity_pct: float | None
+    dry_hours_after: float
     score: float
     preferred_overlap_h: int
+    was_clipped: bool = False
     reasons: list[str] = field(default_factory=list)
 
     @property
     def label(self) -> str:
-        """Short human label, e.g. 'Tue 06:00-10:00'."""
-        same_day = self.start.date() == self.end.date()
-        if same_day:
+        """Short human label, e.g. 'Tue 23 Sep 06:30-10:00'."""
+        if self.start.date() == self.end.date():
             return f"{self.start:%a %d %b} {self.start:%H:%M}-{self.end:%H:%M}"
         return f"{self.start:%a %d %b %H:%M} - {self.end:%a %d %b %H:%M}"
 
@@ -77,20 +102,76 @@ class SprayAdvice:
         return self.windows[0] if self.windows else None
 
 
-def _rain_free_ahead(rain: pd.Series, idx: int, hours: int) -> tuple[bool, float]:
-    """Is it dry for `hours` after position `idx`? Returns (ok, dry_hours_seen).
+# --------------------------------------------------------------------------
+# Daylight helpers
+# --------------------------------------------------------------------------
 
-    A truncated forecast counts as NOT ok: we will not promise a dry spell we
-    cannot actually see. The caller reports that honestly.
+def _daylight_bounds(day: pd.Timestamp) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """The daylight interval for the calendar day containing `day`."""
+    base = day.normalize()
+    start = base + pd.Timedelta(
+        hours=config.SPRAY_DAYLIGHT_START.hour,
+        minutes=config.SPRAY_DAYLIGHT_START.minute,
+    )
+    end = base + pd.Timedelta(
+        hours=config.SPRAY_DAYLIGHT_END.hour,
+        minutes=config.SPRAY_DAYLIGHT_END.minute,
+    )
+    return start, end
+
+
+def _hour_touches_daylight(ts: pd.Timestamp) -> bool:
+    """Does the hour beginning at `ts` overlap daylight at all?
+
+    Hours 06:00 and 18:00 partially overlap a 06:30-18:30 span, so they are
+    allowed through here and trimmed precisely at the interval stage.
+    """
+    hour_start = ts
+    hour_end = ts + pd.Timedelta(hours=1)
+    day_start, day_end = _daylight_bounds(ts)
+    return hour_start < day_end and hour_end > day_start
+
+
+def _clip_to_daylight(
+    start: pd.Timestamp, end: pd.Timestamp
+) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    """Intersect [start, end) with daylight, returning 0..n sub-intervals.
+
+    A run spanning several days yields one sub-interval per day, so
+    'Mon 19:00 -> Tue 08:00' collapses to just 'Tue 06:30 -> Tue 08:00'.
+    """
+    out: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+    day = start.normalize()
+    last = end.normalize()
+    while day <= last:
+        d_start, d_end = _daylight_bounds(day)
+        s = max(start, d_start)
+        e = min(end, d_end)
+        if s < e:
+            out.append((s, e))
+        day += pd.Timedelta(days=1)
+    return out
+
+
+# --------------------------------------------------------------------------
+# Rain lookahead
+# --------------------------------------------------------------------------
+
+def _rain_free_ahead(rain: pd.Series, idx: int, hours: int) -> tuple[bool, bool]:
+    """Is it dry for `hours` after position `idx`?
+
+    Returns (ok, truncated). `truncated` distinguishes "we saw rain coming" from
+    "the forecast ran out", because those need different explanations.
+
+    This deliberately looks through NIGHT hours: rain at 2am still washes off a
+    7pm spray, so the dry requirement ignores the daylight limit.
     """
     window = rain.iloc[idx + 1: idx + 1 + hours]
     if len(window) < hours:
-        return False, float(len(window))
-
-    wet = window > config.SPRAY_RAIN_TRACE_MM
-    if wet.any():
-        return False, float(wet.to_numpy().argmax())
-    return True, float(hours)
+        return False, True
+    if (window > config.SPRAY_RAIN_TRACE_MM).any():
+        return False, False
+    return True, False
 
 
 def _dry_run_after(rain: pd.Series, idx: int) -> float:
@@ -103,6 +184,10 @@ def _dry_run_after(rain: pd.Series, idx: int) -> float:
     return float(n)
 
 
+# --------------------------------------------------------------------------
+# Main entry point
+# --------------------------------------------------------------------------
+
 def find_windows(
     forecast_df: pd.DataFrame,
     *,
@@ -112,7 +197,8 @@ def find_windows(
 ) -> SprayAdvice:
     """Find sprayable windows in an hourly forecast frame.
 
-    `forecast_df` needs canonical columns: timestamp, rain_mm, wind_speed_ms.
+    `forecast_df` needs canonical columns: timestamp, rain_mm, wind_speed_ms,
+    and ideally humidity_pct for the wet-leaf check.
     `currently_raining` lets the caller override with a live station reading,
     which is more trustworthy than the forecast for the current hour.
     """
@@ -133,10 +219,10 @@ def find_windows(
     lookahead_hours = lookahead_hours or config.SPRAY_LOOKAHEAD_HOURS
     now = pd.Timestamp.now() if now is None else now
 
-    df = forecast_df.sort_values("timestamp").reset_index(drop=True)
+    full = forecast_df.sort_values("timestamp").reset_index(drop=True)
     start_at = now.floor("h")
     horizon = start_at + pd.Timedelta(hours=lookahead_hours)
-    df = df[(df["timestamp"] >= start_at) & (df["timestamp"] < horizon)]
+    df = full[(full["timestamp"] >= start_at) & (full["timestamp"] < horizon)]
     df = df.reset_index(drop=True)
 
     if df.empty:
@@ -151,8 +237,14 @@ def find_windows(
 
     rain = df["rain_mm"].fillna(0.0)
     wind = df["wind_speed_ms"]
+    has_humidity = "humidity_pct" in df.columns
+    humidity = df["humidity_pct"] if has_humidity else None
 
-    # A live "it is raining right now" reading beats the forecast for hour 0.
+    if not has_humidity:
+        advice.reasons.append(
+            "Note: forecast has no humidity, so wet leaves could not be checked."
+        )
+
     if currently_raining:
         advice.reasons.append(
             "It is raining at the station right now, so the next hour is ruled out."
@@ -160,37 +252,48 @@ def find_windows(
 
     rejections: dict[str, int] = {}
     sprayable: list[bool] = []
-    dry_after: list[float] = []
 
     for i in range(len(df)):
+        ts = df["timestamp"].iloc[i]
         reject: str | None = None
 
         if currently_raining and i == 0:
-            reject = "raining now"
+            reject = R_RAINING_NOW
+        elif not _hour_touches_daylight(ts):
+            reject = R_NIGHT
         elif rain.iloc[i] > config.SPRAY_RAIN_TRACE_MM:
-            reject = "rain during the hour"
+            reject = R_RAIN_HOUR
+        elif has_humidity and pd.notna(humidity.iloc[i]) and \
+                humidity.iloc[i] >= config.SPRAY_MAX_HUMIDITY_PCT:
+            reject = R_WET_LEAF
         elif pd.isna(wind.iloc[i]):
-            reject = "no wind reading"
+            reject = R_NO_WIND
         elif wind.iloc[i] < config.SPRAY_WIND_MIN_MS:
-            reject = "too calm"
+            reject = R_CALM
         elif wind.iloc[i] > config.SPRAY_WIND_MAX_MS:
-            reject = "too windy"
+            reject = R_WINDY
         else:
-            ok_dry, seen = _rain_free_ahead(rain, i, config.SPRAY_DRY_HOURS_REQUIRED)
+            # Dry-spell check runs against the FULL frame, not the trimmed one,
+            # so a window near the horizon can still be confirmed if the wider
+            # forecast covers it.
+            full_idx = full.index[full["timestamp"] == ts]
+            if len(full_idx):
+                ok_dry, truncated = _rain_free_ahead(
+                    full["rain_mm"].fillna(0.0), int(full_idx[0]),
+                    config.SPRAY_DRY_HOURS_REQUIRED,
+                )
+            else:
+                ok_dry, truncated = _rain_free_ahead(
+                    rain, i, config.SPRAY_DRY_HOURS_REQUIRED)
             if not ok_dry:
-                reject = ("forecast ends too soon to confirm"
-                          if i + 1 + config.SPRAY_DRY_HOURS_REQUIRED > len(df)
-                          else "rain expected within "
-                               f"{config.SPRAY_DRY_HOURS_REQUIRED}h")
+                reject = R_TRUNCATED if truncated else R_RAIN_SOON
 
         sprayable.append(reject is None)
-        dry_after.append(_dry_run_after(rain, i))
         if reject:
             rejections[reject] = rejections.get(reject, 0) + 1
 
-    advice.rejection_counts = rejections
-
-    # Merge consecutive sprayable hours into windows.
+    # Merge consecutive sprayable hours, clip each run to daylight, keep what
+    # is still long enough.
     windows: list[SprayWindow] = []
     i = 0
     while i < len(sprayable):
@@ -201,12 +304,22 @@ def find_windows(
         while j + 1 < len(sprayable) and sprayable[j + 1]:
             j += 1
 
-        length = j - i + 1
-        if length >= config.SPRAY_WINDOW_MIN_HOURS:
-            windows.append(_build_window(df, wind, i, j, dry_after[j]))
+        run_start = df["timestamp"].iloc[i]
+        run_end = df["timestamp"].iloc[j] + pd.Timedelta(hours=1)
+
+        for seg_start, seg_end in _clip_to_daylight(run_start, run_end):
+            hours = (seg_end - seg_start) / pd.Timedelta(hours=1)
+            if hours < config.SPRAY_MIN_WINDOW_HOURS:
+                rejections[R_SHORT] = rejections.get(R_SHORT, 0) + 1
+                continue
+            clipped = (seg_start != run_start) or (seg_end != run_end)
+            windows.append(
+                _build_window(df, full, seg_start, seg_end, clipped)
+            )
         i = j + 1
 
     windows.sort(key=lambda w: (-w.score, w.start))
+    advice.rejection_counts = rejections
     advice.windows = windows
 
     if windows:
@@ -227,39 +340,68 @@ def find_windows(
 
 
 def _build_window(
-    df: pd.DataFrame, wind: pd.Series, i: int, j: int, dry_after: float
+    df: pd.DataFrame,
+    full: pd.DataFrame,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    was_clipped: bool,
 ) -> SprayWindow:
-    """Assemble a SprayWindow with its score and plain-language reasons."""
-    start = df["timestamp"].iloc[i]
-    end = df["timestamp"].iloc[j]
-    length = j - i + 1
-    w = wind.iloc[i: j + 1]
+    """Assemble a SprayWindow from the hours overlapping [start, end)."""
+    ts = df["timestamp"]
+    overlap = df[(ts + pd.Timedelta(hours=1) > start) & (ts < end)]
 
-    hours = [df["timestamp"].iloc[k].hour for k in range(i, j + 1)]
-    preferred_overlap = sum(1 for h in hours if h in config.SPRAY_PREFERRED_HOURS)
+    w = overlap["wind_speed_ms"].dropna()
+    hum = overlap["humidity_pct"].dropna() if "humidity_pct" in overlap.columns \
+        else pd.Series(dtype=float)
 
-    # Score in 0..1 from three components, weighted by how much each matters.
+    duration = (end - start) / pd.Timedelta(hours=1)
+
+    # Hours whose clock hour falls in the cooler preferred band.
+    preferred = sum(1 for t in overlap["timestamp"]
+                    if t.hour in config.SPRAY_PREFERRED_HOURS)
+
+    # Dry hours following the last hour of this window.
+    last_ts = overlap["timestamp"].iloc[-1]
+    full_idx = full.index[full["timestamp"] == last_ts]
+    rain_series = full["rain_mm"].fillna(0.0)
+    dry_after = _dry_run_after(rain_series, int(full_idx[0])) if len(full_idx) else 0.0
+
     band_mid = (config.SPRAY_WIND_MIN_MS + config.SPRAY_WIND_MAX_MS) / 2
     band_half = (config.SPRAY_WIND_MAX_MS - config.SPRAY_WIND_MIN_MS) / 2
-    wind_centrality = 1.0 - min(abs(float(w.mean()) - band_mid) / band_half, 1.0)
-    time_of_day = preferred_overlap / length
-    duration_score = min(length / 4.0, 1.0)  # 4h+ is as good as it needs to be
+    mean_wind = float(w.mean()) if len(w) else 0.0
+    wind_centrality = 1.0 - min(abs(mean_wind - band_mid) / band_half, 1.0)
+    time_of_day = preferred / len(overlap) if len(overlap) else 0.0
+    duration_score = min(duration / 4.0, 1.0)  # 4h+ is as good as it needs to be
 
     score = 0.45 * time_of_day + 0.35 * wind_centrality + 0.20 * duration_score
 
     reasons = [
         f"No rain expected for at least {config.SPRAY_DRY_HOURS_REQUIRED} hours "
         f"after spraying, so the fungicide has time to stick.",
-        f"Wind {w.mean():.1f} m/s (range {w.min():.1f}-{w.max():.1f}), inside the "
-        f"{config.SPRAY_WIND_MIN_MS:.0f}-{config.SPRAY_WIND_MAX_MS:.0f} m/s "
-        f"band - strong enough to carry the spray, gentle enough not to blow it away.",
-        f"Window is {length} hour(s) long.",
+        f"Wind {mean_wind:.1f} m/s (range {w.min():.1f}-{w.max():.1f}), inside the "
+        f"{config.SPRAY_WIND_MIN_MS:.0f}-{config.SPRAY_WIND_MAX_MS:.0f} m/s band - "
+        f"strong enough to carry the spray, gentle enough not to blow it away.",
     ]
-    if preferred_overlap == length:
+    if len(hum):
+        reasons.append(
+            f"Humidity {hum.min():.0f}-{hum.max():.0f}%, below the "
+            f"{config.SPRAY_MAX_HUMIDITY_PCT:.0f}% at which dew would dilute the "
+            f"spray and run off the leaf."
+        )
+    reasons.append(f"Window is {duration:.1f} hour(s) long.")
+
+    if was_clipped:
+        reasons.append(
+            f"Trimmed to daylight ({config.SPRAY_DAYLIGHT_START:%H:%M}-"
+            f"{config.SPRAY_DAYLIGHT_END:%H:%M}) - the dry spell runs longer, but "
+            f"spraying in the dark is not practical."
+        )
+
+    if preferred == len(overlap):
         reasons.append("Falls entirely in the cool part of the day - less spray "
                        "lost to evaporation.")
-    elif preferred_overlap:
-        reasons.append(f"{preferred_overlap} of {length} hours fall in the cooler "
+    elif preferred:
+        reasons.append(f"{preferred} of {len(overlap)} hours fall in the cooler "
                        f"part of the day.")
     else:
         reasons.append("Falls in the heat of the day - more spray will evaporate, "
@@ -268,13 +410,15 @@ def _build_window(
     return SprayWindow(
         start=start,
         end=end,
-        duration_hours=length,
-        mean_wind_ms=float(w.mean()),
-        max_wind_ms=float(w.max()),
-        min_wind_ms=float(w.min()),
+        duration_hours=round(duration, 2),
+        mean_wind_ms=mean_wind,
+        max_wind_ms=float(w.max()) if len(w) else 0.0,
+        min_wind_ms=float(w.min()) if len(w) else 0.0,
+        max_humidity_pct=float(hum.max()) if len(hum) else None,
         dry_hours_after=dry_after,
         score=round(score, 3),
-        preferred_overlap_h=preferred_overlap,
+        preferred_overlap_h=preferred,
+        was_clipped=was_clipped,
         reasons=reasons,
     )
 

@@ -10,6 +10,7 @@ Nothing in here reads the network. Credentials come from .env via os.environ.
 from __future__ import annotations
 
 import os
+from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -125,8 +126,27 @@ SPRAY_RAIN_TRACE_MM = 0.2
 SPRAY_WIND_MIN_MS = 1.0
 SPRAY_WIND_MAX_MS = 4.0
 
-# Minimum length of a usable window - less than 2 h is not worth mixing a tank for.
-SPRAY_WINDOW_MIN_HOURS = 2
+# Minimum length of a usable window, AFTER daylight clipping and the wet-leaf
+# veto. A farmer needs time to mix the tank and walk the rows; under 2 h is not
+# worth the trip.
+SPRAY_MIN_WINDOW_HOURS = 2
+
+# Spraying happens in daylight only. Juja sits at latitude -1.09, essentially on
+# the equator, so day length barely changes through the year - sunrise stays
+# within a few minutes of 06:30 and sunset of 18:40 in every month. We stop at
+# 18:30 so a window never runs into dusk.
+# NOTE: this limits when SPRAYING may happen. The 6-hour rain-free requirement
+# after spraying is still checked against the full forecast, night included.
+SPRAY_DAYLIGHT_START = time(6, 30)
+SPRAY_DAYLIGHT_END = time(18, 30)
+
+# Wet-leaf veto. Dew or fog sitting on the leaf dilutes the fungicide and makes
+# it run off instead of sticking. This is deliberately the SAME threshold as the
+# Hutton humidity criterion - if the air is humid enough to count toward blight
+# risk, it is humid enough to wet the leaf. Referenced, never duplicated, so the
+# two can not drift apart. In practice this pushes morning windows to start
+# after the dew has burned off.
+SPRAY_MAX_HUMIDITY_PCT = HUTTON_RH_THRESHOLD_PCT
 
 # How far ahead to look for windows.
 SPRAY_LOOKAHEAD_HOURS = 72
