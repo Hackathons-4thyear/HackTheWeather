@@ -21,7 +21,6 @@ Files already in the repo that make this work — nothing to create:
 | File | Purpose |
 |---|---|
 | `requirements.txt` | Pinned to the exact versions the tests ran on |
-| `runtime.txt` | `python-3.13` |
 | `.streamlit/config.toml` | Theme, so cloud matches local |
 | `data/conduit_history.parquet` | 476 days of real data (0.81 MB) so the app works offline |
 | `app.py` | The entry point |
@@ -57,12 +56,21 @@ The repo can be **public or private** — Community Cloud handles both.
    - **Branch:** `main`
    - **Main file path:** `app.py`
    - **App URL:** pick your subdomain, e.g. `shamba-pulse`
-5. *(Optional)* Click **"Advanced settings"** and confirm **Python version
-   3.13**. `runtime.txt` already requests it; this is belt and braces.
+5. **Click "Advanced settings" and set Python version to 3.12.** This is not
+   optional. Community Cloud does **not** read `runtime.txt` or
+   `.python-version` - the dropdown is the only place the version is set, and
+   the default is 3.12.
+
+   **3.12 or 3.13 both work. 3.11 and below will FAIL**, because
+   `numpy==2.5.3` requires Python >= 3.12 and pip will not find an installable
+   version. Verified: every pin installs and imports cleanly in a fresh 3.12
+   environment, and the app runs there in about 14 seconds cold.
+
 6. Click **"Deploy"**.
 
-First build takes **3–5 minutes** — it is compiling pandas and pyarrow wheels.
-You will see the build log stream. Leave it alone.
+First build takes **3–5 minutes**. Nothing compiles from source — every pin has
+a prebuilt Linux wheel — so this is download and unpack time. You will see the
+build log stream. Leave it alone.
 
 **The app will work at this point, even with no secrets.** It falls back to the
 committed history and the banner reads *"Cached station history (real Conduit
@@ -146,13 +154,21 @@ set"*, the secrets did not save or are misspelled — names are case-sensitive.
 If it says `HTTP 401`, the credentials are wrong. If it says a network error,
 the station is down and the fallback is doing its job.
 
-**Build fails on `pip install`**
-Check the build log for which package. The pins in `requirements.txt` are the
-versions we tested; if a wheel is unavailable for the cloud's Python, set
-`runtime.txt` to `python-3.12` and redeploy.
+**Build fails on `pip install`, or the app sits on "Your app is in the oven"**
+Almost always the Python version. Check Advanced settings: anything below 3.12
+cannot install `numpy==2.5.3`. Set it to **3.12**, then use **Reboot app** -
+changing the setting alone does not always rebuild the environment. If that
+does not clear it, delete the app and redeploy; a wedged build sometimes will
+not recover in place.
+
+All eight pins were checked against PyPI and have manylinux wheels for cp312
+and cp313, so nothing needs compiling from source.
 
 **App is slow on first load**
-Expected. It fetches the forecast and replays 476 days of backtest. Results are
+Expected, but bounded: about 14 seconds in a clean environment. It calls the
+station API (30 s timeout) and Open-Meteo (20 s timeout), then replays the
+92-day backtest (~3 s). Worst case, if both APIs hang until they time out, the
+first load takes under a minute and still renders from cached data. Results are
 cached (`@st.cache_data`, 10–60 min TTLs), so later loads are fast. The cache
 clears on reboot.
 
@@ -167,8 +183,8 @@ heaviest step. Reboot from the ⋮ menu; if it recurs, limit the backtest with
 
 Push to `main`. Community Cloud redeploys automatically.
 
-`requirements.txt` or `runtime.txt` changes trigger a full rebuild (3–5 min);
-code-only changes are much faster.
+`requirements.txt` changes trigger a full rebuild (3–5 min); code-only
+changes are much faster.
 
 **Secrets survive redeploys** — you only enter them once.
 
