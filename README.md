@@ -25,6 +25,9 @@ Hack The Weather 2026 · JHUB Africa / JKUAT
   10 HIGH-risk days, 15 messages, no lookahead.
 - **Honesty:** we found three faults in the station data that would each have
   produced confidently wrong advice, and we publish them.
+- **The dashboard** puts the verdict first: a risk ring, the action to take, the
+  week ahead, a daylight spray timeline, the SMS on a phone, and the station on
+  a map.
 
 ```bash
 .venv/Scripts/streamlit run app.py     # works with no API key - see Running it
@@ -32,22 +35,24 @@ Hack The Weather 2026 · JHUB Africa / JKUAT
 
 ---
 
-![Risk card with plain-language reasons](docs/img/01-risk-card.png)
+![Hero with the risk ring, and the action card beneath it](docs/img/01-risk-card.png)
 
-*Today's risk with the reasons behind it. The amber banner is the app telling
-you the station's newest reading is 13 hours old rather than calling stale data
-"live".*
+*The verdict first: a risk ring that states the level in words as well as
+colour, one imperative sentence naming the actual spray window, and the reasons
+behind it. The "lagging" pill is the app reporting that the station's newest
+reading is hours old rather than calling stale data "live".*
 
-![Spray windows and the bilingual SMS preview](docs/img/02-spray-and-sms.png)
+![Spray daylight timeline and the SMS as it reaches a phone](docs/img/02-spray-and-sms.png)
 
-*Ranked spray windows with what was ruled out and why, and the exact SMS a
-farmer would receive in both languages.*
+*Spray windows drawn across each day's daylight hours, with a plain sentence
+saying what was ruled out and why &mdash; then the exact SMS a farmer receives,
+shown on a phone, switchable between English and Kiswahili.*
 
 ![Backtest timeline over the OND 2025 short rains](docs/img/03-backtest-timeline.png)
 
-*Every day of the OND 2025 short rains replayed. Red is HIGH risk, triangles
-are messages that would have been sent, and the shaded band is the KMD
-heavy-rainfall advisory.*
+*Every day of the OND 2025 short rains replayed, under the headline numbers.
+Red is HIGH risk, triangles are messages that would have been sent, and the
+shaded band is the KMD heavy-rainfall advisory.*
 
 ![Station rainfall cross-checked against ERA5 reanalysis](docs/img/04-era5-crosscheck.png)
 
