@@ -103,6 +103,9 @@ def run_backtest(
     if end is not None:
         last = min(last, pd.Timestamp(end).normalize())
 
+    # One policy instance walks the whole season, carrying state day to day.
+    policy = alerts_mod.AlertPolicy()
+
     rows: list[dict] = []
     day = first
     while day <= last:
@@ -126,6 +129,7 @@ def run_backtest(
                 advice = sw.find_windows(hourly, now=as_of)
 
         alert = alerts_mod.build_alert(risk, advice, now=as_of)
+        decision = policy.evaluate(alert, as_of)
 
         rows.append({
             "as_of": as_of,
@@ -136,7 +140,12 @@ def run_backtest(
             "consecutive_hutton_days": risk.consecutive_hutton_days,
             "humid_hours_24h": risk.humid_hours_last_24h,
             "method": risk.method,
-            "would_send": alert.should_send,
+            # eligible = the level alone warrants a text (the old behaviour)
+            # would_send = what the send POLICY actually decides
+            "eligible": alert.should_send,
+            "would_send": decision.send,
+            "send_reason": decision.reason,
+            "overrode_cooldown": decision.overrode_cooldown,
             "kind": alert.kind,
             "sms_en": alert.sms_for("en"),
             "sms_sw": alert.sms_for("sw"),
@@ -186,13 +195,29 @@ def summarise(results: pd.DataFrame, source: str) -> None:
             bar = "#" * int(40 * n / len(results))
             print(f"    {level:<9} {n:>4} days ({pct:>5.1f}%)  {bar}")
 
+    n_days = len(results)
+    n_eligible = int(results["eligible"].sum())
     n_send = int(results["would_send"].sum())
-    print()
-    print(f"  Alerts that would have been SENT: {n_send} "
-          f"({100 * n_send / len(results):.1f}% of days)")
 
-    trimmed = changes_only(results)
-    print(f"  After de-duplicating repeats:     {int(trimmed['would_send'].sum())}")
+    print()
+    print("  SMS volume:")
+    print(f"    Without a send policy (every eligible day):"
+          f" {n_eligible:>4} texts  ({100 * n_eligible / n_days:>5.1f}% of days)")
+    print(f"    With the send policy applied:             "
+          f" {n_send:>4} texts  ({100 * n_send / n_days:>5.1f}% of days)")
+    if n_eligible:
+        cut = 100 * (1 - n_send / n_eligible)
+        print(f"    Reduction: {cut:.0f}% fewer texts")
+
+    by_level = results[results["would_send"]].groupby("level").size()
+    if len(by_level):
+        print()
+        print("    Texts by level:")
+        for level, n in by_level.items():
+            print(f"      {level:<9} {n}")
+    n_override = int(results["overrode_cooldown"].sum())
+    if n_override:
+        print(f"    HIGH escalations that overrode the cooldown: {n_override}")
 
     hutton_days = results[results["consecutive_hutton_days"] > 0]
     print()

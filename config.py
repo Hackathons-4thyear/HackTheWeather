@@ -161,6 +161,31 @@ SPRAY_PREFERRED_HOURS = tuple(range(6, 11)) + tuple(range(15, 19))  # 06:00-10:5
 
 SMS_MAX_CHARS = 160  # One GSM-7 segment. Longer costs the farmer more.
 
+# --------------------------------------------------------------------------
+# SMS send policy - what gets TEXTED, as opposed to what gets shown
+# --------------------------------------------------------------------------
+# The dashboard always shows every day's risk level. This policy decides only
+# which days are worth spending a farmer's attention (and an SMS) on.
+# A service that texts every morning gets ignored, and an ignored alert is
+# worth nothing on the day it finally matters.
+
+# Levels that are eligible to send at all. LOW and UNKNOWN never text: there is
+# no action to take, and "no news" is the same information.
+SMS_ALWAYS_SEND_LEVELS = ("HIGH",)
+
+# Levels that text only when the risk has RISEN into them, not while they sit
+# there. A week of "risk rising" messages says nothing new after the first.
+SMS_ESCALATION_ONLY_LEVELS = ("MODERATE",)
+
+# Minimum days between two texts at the SAME level. Stops a level that flaps
+# LOW -> MODERATE -> LOW from texting every other morning.
+SMS_COOLDOWN_DAYS = 3
+
+# An escalation INTO this level ignores the cooldown entirely. Two consecutive
+# Hutton days is the moment the whole service exists for; it must never be
+# suppressed by a timer.
+SMS_COOLDOWN_OVERRIDE_LEVEL = "HIGH"
+
 # Risk levels, ordered low -> high. Used for sorting and colour-coding.
 RISK_LEVELS = ("LOW", "MODERATE", "HIGH")
 

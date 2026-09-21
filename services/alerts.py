@@ -21,7 +21,7 @@ import pandas as pd
 
 import config
 from services import messages as msg
-from services.disease_engine import RiskAssessment
+from services.disease_engine import RiskAssessment, _severity
 from services.spray_window import SprayAdvice, SprayWindow
 
 
@@ -155,3 +155,116 @@ def preview(alert: Alert) -> str:
         lines.append("Why:")
         lines.extend(f"  - {r}" for r in alert.reasons)
     return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
+# Send policy
+# --------------------------------------------------------------------------
+# Alert.should_send answers "is this level worth a text at all?". The policy
+# below answers the harder question: "worth a text TODAY, given what we already
+# sent?" It is stateful across days, so it lives in its own object rather than
+# on the Alert.
+#
+# The dashboard ignores all of this and shows every day's level. This only
+# governs SMS.
+
+@dataclass
+class SendDecision:
+    """Whether to text, and the reason - so the backtest can explain itself."""
+
+    send: bool
+    reason: str
+    overrode_cooldown: bool = False
+
+
+@dataclass
+class PolicyState:
+    """What the policy remembers between days."""
+
+    previous_level: str | None = None
+    last_sent_at: pd.Timestamp | None = None
+    last_sent_level: str | None = None
+
+
+class AlertPolicy:
+    """Decides which alerts actually get texted.
+
+    Rules, all driven by config:
+      * LOW / UNKNOWN            -> never text. No action to take.
+      * HIGH                     -> always eligible; an escalation INTO HIGH
+                                    ignores the cooldown entirely.
+      * MODERATE                 -> only on escalation from LOW/UNKNOWN, never
+                                    while it persists.
+      * Same level twice         -> must be SMS_COOLDOWN_DAYS apart.
+    """
+
+    def __init__(self, state: PolicyState | None = None) -> None:
+        self.state = state or PolicyState()
+
+    # -- helpers ---------------------------------------------------------
+    def _is_escalation(self, level: str) -> bool:
+        """Has risk RISEN into this level since the last assessment?"""
+        prev = self.state.previous_level
+        if prev is None:
+            return True  # first ever assessment at an actionable level
+        return _severity(level) > _severity(prev)
+
+    def _cooldown_blocks(self, level: str, now: pd.Timestamp) -> bool:
+        if self.state.last_sent_at is None:
+            return False
+        if self.state.last_sent_level != level:
+            return False  # cooldown is per level
+        elapsed = (now.normalize() - self.state.last_sent_at.normalize()).days
+        return elapsed < config.SMS_COOLDOWN_DAYS
+
+    # -- the decision ----------------------------------------------------
+    def decide(self, alert: Alert, now: pd.Timestamp | None = None) -> SendDecision:
+        now = alert.created_at if now is None else now
+        now = pd.Timestamp.now() if now is None else now
+        level = alert.level
+
+        eligible = (level in config.SMS_ALWAYS_SEND_LEVELS
+                    or level in config.SMS_ESCALATION_ONLY_LEVELS)
+        if not eligible:
+            return SendDecision(False, f"{level}: no action needed, nothing to text")
+
+        escalation = self._is_escalation(level)
+
+        if level in config.SMS_ESCALATION_ONLY_LEVELS and not escalation:
+            return SendDecision(
+                False,
+                f"{level} has not risen since yesterday - already told them")
+
+        # An escalation into the override level beats any timer.
+        if escalation and level == config.SMS_COOLDOWN_OVERRIDE_LEVEL:
+            return SendDecision(
+                True, f"escalated to {level} - overrides cooldown",
+                overrode_cooldown=self._cooldown_blocks(level, now))
+
+        if self._cooldown_blocks(level, now):
+            days = (now.normalize() - self.state.last_sent_at.normalize()).days
+            return SendDecision(
+                False,
+                f"cooldown: last {level} text was {days}d ago, "
+                f"minimum is {config.SMS_COOLDOWN_DAYS}d")
+
+        if escalation:
+            return SendDecision(True, f"escalated to {level}")
+        return SendDecision(True, f"{level} continuing, cooldown expired")
+
+    def record(self, alert: Alert, decision: SendDecision,
+               now: pd.Timestamp | None = None) -> None:
+        """Update state after acting on a decision. Call once per assessment."""
+        now = alert.created_at if now is None else now
+        now = pd.Timestamp.now() if now is None else now
+        if decision.send:
+            self.state.last_sent_at = now
+            self.state.last_sent_level = alert.level
+        self.state.previous_level = alert.level
+
+    def evaluate(self, alert: Alert,
+                 now: pd.Timestamp | None = None) -> SendDecision:
+        """decide() then record(), the usual one-call-per-day path."""
+        decision = self.decide(alert, now)
+        self.record(alert, decision, now)
+        return decision
