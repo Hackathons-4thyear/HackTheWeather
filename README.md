@@ -451,3 +451,14 @@ Blight model: **Hutton criteria**, James Hutton Institute.
 SMS: **Africa's Talking**.
 
 Built for **Hack The Weather 2026**, JHUB Africa & JKUAT, Kenya.
+
+**Weather station data belongs to JHUB Africa / JKUAT** and is used with the
+access granted to hackathon participants. Open-Meteo forecast and ERA5
+reanalysis are used under Open-Meteo's terms (CC-BY-4.0 for the data). The KMD
+advisory is cited, not reproduced.
+
+## License
+
+This project's own code and documentation are released under the
+[MIT License](LICENSE). That covers what we wrote; it does not grant rights
+over the station data above.
