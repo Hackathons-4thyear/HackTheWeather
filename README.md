@@ -8,6 +8,45 @@ Hack The Weather 2026 · JHUB Africa / JKUAT
 
 ---
 
+## In 30 seconds
+
+- **What:** turns the JKUAT Conduit station's readings into two decisions —
+  *is my crop at risk of late blight*, and *when should I spray*.
+- **How:** the Hutton criteria on station humidity and temperature, plus a
+  spray-window finder over the Open-Meteo forecast. Rule-based, every threshold
+  explained in one file.
+- **Output:** an SMS under 160 characters in **English and Kiswahili**, sent
+  only when the risk actually changes.
+- **Evidence:** replayed against the **real OND 2025 short rains** — 92 days,
+  10 HIGH-risk days, 15 messages, no lookahead.
+- **Honesty:** we found three faults in the station data that would each have
+  produced confidently wrong advice, and we publish them.
+
+```bash
+.venv/Scripts/streamlit run app.py     # works with no API key - see Running it
+```
+
+---
+
+![Risk card with plain-language reasons](docs/img/01-risk-card.png)
+
+*Today's risk with the reasons behind it. The amber banner is the app telling
+you the station's newest reading is 13 hours old rather than calling stale data
+"live".*
+
+![Spray windows and the bilingual SMS preview](docs/img/02-spray-and-sms.png)
+
+*Ranked spray windows with what was ruled out and why, and the exact SMS a
+farmer would receive in both languages.*
+
+![Backtest timeline over the OND 2025 short rains](docs/img/03-backtest-timeline.png)
+
+*Every day of the OND 2025 short rains replayed. Red is HIGH risk, triangles
+are messages that would have been sent, and the shaded band is the KMD
+heavy-rainfall advisory.*
+
+---
+
 ## It works on real data
 
 We replayed the **October–December 2025 short rains** through the engine, one
@@ -61,6 +100,60 @@ Reproduce it exactly:
 (Running `analysis/backtest.py` with no arguments replays the **full 476-day**
 history instead, which is a different and larger result: 475 days, 79 HIGH
 days, 61 messages.)
+
+---
+
+## Running it
+
+**Requires Python 3.11+** (developed on 3.13).
+
+```bash
+git clone <repo-url>
+cd shamba-pulse
+
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt   # Windows
+# source .venv/bin/activate && pip install -r requirements.txt  # macOS/Linux
+
+.venv\Scripts\streamlit run app.py
+```
+
+Opens `http://localhost:8501`. **It runs without credentials** — it falls back
+to the committed 476-day station history and says so in the banner.
+
+For live station data, copy `.env.example` to `.env` and fill in
+`CONDUIT_API_KEY` and `CONDUIT_EMAIL`. Deploying to Streamlit Community Cloud:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+<details>
+<summary><strong>Everything else you can run</strong></summary>
+
+```bash
+# Confirm the live API and print the raw response
+.venv/Scripts/python.exe analysis/test_conduit_live.py
+
+# Inspect whatever is in data/
+.venv/Scripts/python.exe analysis/explore_data.py data/conduit_history.parquet
+
+# Download history (cached, 1s spacing, resumable)
+.venv/Scripts/python.exe analysis/fetch_history.py
+
+# Replay the canonical season
+.venv/Scripts/python.exe analysis/backtest.py --from 2025-10-01 --to 2025-12-31
+
+# Cross-check our rainfall against ERA5
+.venv/Scripts/python.exe analysis/validate_rain.py
+
+# 287 tests
+.venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+.venv/Scripts/python.exe -m pytest tests/ -q
+```
+
+SMS defaults to **dry run** — messages print, nothing is sent. Set
+`SMS_DRY_RUN=false` with `AT_USERNAME=sandbox` to use the Africa's Talking
+sandbox.
+
+</details>
 
 ---
 
@@ -254,58 +347,6 @@ farmer's attention:
 
 On real OND 2025 data this cut **46 eligible days to 15 texts (67% fewer)**
 without hiding anything.
-
----
-
-## Running it
-
-**Requires Python 3.11+** (developed on 3.13).
-
-```bash
-git clone <repo-url>
-cd shamba-pulse
-
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt   # Windows
-# source .venv/bin/activate && pip install -r requirements.txt  # macOS/Linux
-
-cp .env.example .env        # then fill in CONDUIT_API_KEY and CONDUIT_EMAIL
-```
-
-### The dashboard
-
-```bash
-.venv\Scripts\streamlit run app.py
-```
-
-Opens `http://localhost:8501`. **It runs without credentials** — it falls back
-to the committed 476-day history and says so in the banner.
-
-### Everything else
-
-```bash
-# Confirm the live API and print the raw response
-.venv/Scripts/python.exe analysis/test_conduit_live.py
-
-# Inspect whatever is in data/
-.venv/Scripts/python.exe analysis/explore_data.py data/conduit_history.parquet
-
-# Download history (cached, 1s spacing, resumable)
-.venv/Scripts/python.exe analysis/fetch_history.py
-
-# Replay history and show the alerts that would have fired
-.venv/Scripts/python.exe analysis/backtest.py
-
-# Cross-check our rainfall against ERA5
-.venv/Scripts/python.exe analysis/validate_rain.py
-
-# 282 tests
-.venv/Scripts/python.exe -m pytest tests/ -q
-```
-
-SMS defaults to **dry run** — messages print, nothing is sent. Set
-`SMS_DRY_RUN=false` with `AT_USERNAME=sandbox` to use the Africa's Talking
-sandbox.
 
 ---
 
