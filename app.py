@@ -357,7 +357,7 @@ def style_fig(fig, height: int, *, legend: bool = False, ytitle: str = "") -> No
 
 
 def render_forecast_chart(df: pd.DataFrame) -> None:
-    st.markdown("<div class='sect'>Next 7 days</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sp-h'>Next 7 days</div>", unsafe_allow_html=True)
 
     fig = make_subplots(
         rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
@@ -508,8 +508,8 @@ LEVEL_ORDER = {"LOW": 0, "MODERATE": 1, "HIGH": 2, de.UNKNOWN: -1}
 
 
 def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
-    st.markdown("<div class='sect'>Would it have worked?</div>"
-                "<div class='sect-sub'>Replaying the real station history one "
+    st.markdown("<div class='sp-h'>Would it have worked?</div>"
+                "<div class='sp-h-sub'>Replaying the real station history one "
                 "morning at a time. At each point the engine sees only what had "
                 "happened by then &mdash; no peeking ahead.</div>",
                 unsafe_allow_html=True)
@@ -626,7 +626,7 @@ def render_backtest(results: pd.DataFrame, scope: str = "season") -> None:
 
 def render_era5_check(data: vr.ValidationData) -> None:
     """Station rainfall against ERA5 reanalysis for the canonical window."""
-    st.markdown("<div class='sect'>Cross-check against ERA5 reanalysis</div>",
+    st.markdown("<div class='sp-h'>Cross-check against ERA5 reanalysis</div>",
                 unsafe_allow_html=True)
 
     if not data.ok:

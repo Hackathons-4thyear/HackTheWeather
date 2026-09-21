@@ -98,7 +98,10 @@ def risk_ring(level: str, *, size: int = 168) -> str:
     dash = f"{circumference * frac:.1f} {circumference:.1f}"
     pulse = (f'<circle class="sp-pulse" cx="{cx}" cy="{cy}" r="{r}" fill="none" '
              f'stroke="{colour}" stroke-width="10"/>') if level == "HIGH" else ""
-    word_size = 25 if len(level) <= 8 else 20
+    # Fit the word inside the ring: at ~0.62em per character, the widest
+    # label (MODERATE, 8 chars) needs to stay under the inner diameter.
+    inner = (r * 2) - 18
+    word_size = max(13, min(26, int(inner / (len(level) * 0.62)))) if level else 22
     return (
         f'<div class="sp-ring-wrap"><svg width="{size}" height="{size}" '
         f'viewBox="0 0 {size} {size}" role="img" '

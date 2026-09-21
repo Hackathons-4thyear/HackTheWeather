@@ -38,11 +38,22 @@
 
 /* ---- page -------------------------------------------------------------- */
 html, body, [data-testid="stAppViewContainer"] {background: var(--paper);}
-[data-testid="stAppViewContainer"] * {font-family: var(--sans);}
+/* Apply the body font broadly, but NOT to Streamlit's Material icon spans -
+   overriding their font makes the ligature name ("arrow_right") render as
+   literal text next to every expander label. */
+[data-testid="stAppViewContainer"] :not([data-testid*="Icon"]):not(.material-icons):not([class*="material-symbols"]) {
+  font-family: var(--sans);
+}
+[data-testid="stIconMaterial"], .material-icons, [class*="material-symbols"],
+[data-testid="stExpander"] svg, [data-testid="stExpander"] [data-testid*="Icon"] {
+  font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+}
 .block-container {
   padding-top: 1.1rem; padding-bottom: 0; max-width: 60rem;
 }
 h1, h2, h3, .serif {font-family: var(--serif) !important;}
+/* .sp-* serif classes carry !important for the same reason:
+   the icon-font exception above is a more specific selector. */
 
 /* ---- hero -------------------------------------------------------------- */
 .sp-hero {
@@ -59,7 +70,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
 }
 .sp-hero-left {flex: 1 1 320px; min-width: 0;}
 .sp-title {
-  font-family: var(--serif); font-size: 2.55rem; font-weight: 700;
+  font-family: var(--serif) !important; font-size: 2.55rem; font-weight: 700;
   line-height: 1.02; letter-spacing: -1px; margin: 0 0 .35rem 0;
 }
 .sp-sub {
@@ -79,7 +90,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
 .sp-ring-wrap {flex: 0 0 auto; display: flex; justify-content: center;
                align-items: center; min-width: 190px;}
 .sp-ring-label {
-  font-family: var(--serif); font-weight: 700; letter-spacing: -.5px;
+  font-family: var(--serif) !important; font-weight: 700; letter-spacing: -.5px;
 }
 @keyframes sp-pulse {
   0%   {opacity: .55; transform: scale(1);}
@@ -101,7 +112,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
 /* ---- action card ------------------------------------------------------- */
 .sp-action {border-left: 6px solid var(--leaf);}
 .sp-action-head {
-  font-family: var(--serif); font-size: 1.42rem; font-weight: 600;
+  font-family: var(--serif) !important; font-size: 1.42rem; font-weight: 600;
   line-height: 1.28; color: var(--ink); margin-bottom: .2rem;
 }
 .sp-action-when {color: var(--leaf); font-weight: 700;}
@@ -134,7 +145,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
   text-transform: uppercase; color: var(--ink-soft); line-height: 1.25;
 }
 .sp-tile-val {
-  font-family: var(--serif); font-size: 1.85rem; font-weight: 700;
+  font-family: var(--serif) !important; font-size: 1.85rem; font-weight: 700;
   color: var(--ink); line-height: 1.05; letter-spacing: -.7px;
 }
 .sp-tile-unit {font-family: var(--sans); font-size: .82rem; font-weight: 600;
@@ -155,7 +166,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
 .sp-day-date {font-size: .72rem; color: var(--ink-soft); margin-bottom: .4rem;}
 .sp-day-bar {height: 6px; border-radius: 999px; margin: .35rem .1rem;}
 .sp-day-val {font-size: .92rem; font-weight: 700; color: var(--ink);
-             font-family: var(--serif);}
+             font-family: var(--serif) !important;}
 .sp-day-sub {font-size: .64rem; color: var(--ink-soft); line-height: 1.3;}
 
 /* ---- spray timeline ---------------------------------------------------- */
@@ -232,7 +243,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
 
 /* ---- section headings -------------------------------------------------- */
 .sp-h {
-  font-family: var(--serif); font-size: 1.5rem; font-weight: 600;
+  font-family: var(--serif) !important; font-size: 1.5rem; font-weight: 600;
   color: var(--ink); letter-spacing: -.5px; margin: .2rem 0 .15rem 0;
 }
 .sp-h-sub {color: var(--ink-soft); font-size: .93rem; line-height: 1.5;
@@ -250,7 +261,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
   display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem;
   margin-bottom: 1rem; box-shadow: var(--shadow);
 }
-.sp-band-n {font-family: var(--serif); font-size: 2.0rem; font-weight: 700;
+.sp-band-n {font-family: var(--serif) !important; font-size: 2.0rem; font-weight: 700;
             line-height: 1; letter-spacing: -1px;}
 .sp-band-l {font-size: .74rem; color: #BFD8CA; margin-top: .3rem;
             line-height: 1.35;}
@@ -278,7 +289,7 @@ h1, h2, h3, .serif {font-family: var(--serif) !important;}
   background: var(--forest); color: #D9E8DF; border-radius: var(--r-lg);
   padding: 1.4rem 1.5rem; margin-top: 1.4rem;
 }
-.sp-footer h4 {font-family: var(--serif); color: #fff; font-size: 1.05rem;
+.sp-footer h4 {font-family: var(--serif) !important; color: #fff; font-size: 1.05rem;
                margin: 0 0 .45rem 0; font-weight: 600;}
 .sp-footer a {color: var(--maize); text-decoration: none; font-weight: 600;}
 .sp-footer a:hover {text-decoration: underline;}
