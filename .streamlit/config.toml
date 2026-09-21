@@ -1,0 +1,15 @@
+# Streamlit configuration, committed so local and cloud look the same.
+
+[theme]
+primaryColor = "#2e7d32"            # the green used for LOW risk / good windows
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6f8"
+textColor = "#1a1f24"
+font = "sans serif"
+
+[server]
+# Station and forecast payloads are small; no need for a large upload limit.
+maxUploadSize = 5
+
+[browser]
+gatherUsageStats = false

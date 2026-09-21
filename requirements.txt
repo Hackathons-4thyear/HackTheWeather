@@ -1,10 +1,14 @@
-# Shamba Pulse - minimal dependency set
-pandas>=2.2
-numpy>=1.26
-requests>=2.31
-python-dotenv>=1.0
-streamlit>=1.37
-plotly>=5.22
-openpyxl>=3.1
-pyarrow>=15.0      # parquet writer for the combined history cache
-pytest>=8.0
+# Shamba Pulse - pinned to the exact versions the app was developed and tested
+# against, so a Streamlit Community Cloud build cannot drift into a different
+# pandas or streamlit than the 282 tests ran on.
+#
+# To relax a pin, change it here, re-run the test suite, and redeploy.
+
+pandas==3.0.6
+numpy==2.5.3
+pyarrow==25.0.1        # parquet reader for the committed station history
+requests==2.34.2
+python-dotenv==1.2.3
+streamlit==1.64.0
+plotly==7.1.0
+openpyxl==3.1.5        # only needed to read .xlsx station exports

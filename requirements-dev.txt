@@ -1,0 +1,4 @@
+# Development extras. NOT installed on Streamlit Community Cloud - keeping the
+# deploy build small and its dependency surface minimal.
+-r requirements.txt
+pytest==9.1.1
