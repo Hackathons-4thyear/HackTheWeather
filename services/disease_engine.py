@@ -320,11 +320,19 @@ def humid_hours_risk(df: pd.DataFrame) -> tuple[str, float, list[str]]:
     if hourly.empty or "humidity_pct" not in hourly.columns:
         return UNKNOWN, 0.0, ["No humidity data available."]
 
-    window = hourly.tail(config.HUMID_HOURS_WINDOW_HOURS)
+    # Select by TIME, not by row count. hourly.tail(24) would silently reach
+    # back days when the record has gaps, and then report those stale hours as
+    # "the last 24 hours".
+    end = hourly.index.max()
+    start = end - pd.Timedelta(hours=config.HUMID_HOURS_WINDOW_HOURS - 1)
+    window = hourly[hourly.index >= start]
     hums = window["humidity_pct"].dropna()
 
     if hums.empty:
         return UNKNOWN, 0.0, ["No humidity readings in the last 24 hours."]
+
+    observed_fraction = len(hums) / config.HUMID_HOURS_WINDOW_HOURS
+    coverage_ok = observed_fraction >= (1.0 - MAX_MISSING_FRACTION)
 
     humid_mask = hums >= config.HUTTON_RH_THRESHOLD_PCT
     humid_hours = float(humid_mask.sum())
@@ -342,10 +350,25 @@ def humid_hours_risk(df: pd.DataFrame) -> tuple[str, float, list[str]]:
         )
         return "LOW", humid_hours, reasons
 
+    # Coverage matters ASYMMETRICALLY here, because this measure is a count.
+    #
+    # Observing 6 humid hours PROVES at least 6 happened, however many hours we
+    # missed - the unseen hours could only add more. So a positive finding is
+    # self-validating and stands regardless of coverage.
+    #
+    # Observing ZERO humid hours in 8 of 24 proves nothing about the other 16,
+    # which is exactly when an overnight humid spell hides. So the LOW verdict -
+    # the only one that tells a farmer to relax - requires real coverage.
     if humid_hours >= config.HUMID_HOURS_HIGH:
         level = "HIGH"
     elif humid_hours >= config.HUMID_HOURS_MODERATE:
         level = "MODERATE"
+    elif not coverage_ok:
+        return UNKNOWN, humid_hours, [
+            f"Only {len(hums)} of the last {config.HUMID_HOURS_WINDOW_HOURS} "
+            f"hours had humidity readings ({1 - observed_fraction:.0%} missing), "
+            f"and nothing humid was seen in them. Too little to call it safe."
+        ]
     else:
         level = "LOW"
 

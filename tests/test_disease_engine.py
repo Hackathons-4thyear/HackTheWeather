@@ -438,3 +438,64 @@ def test_both_measures_are_always_reported():
     assert result.hutton_level in (*config.RISK_LEVELS, de.UNKNOWN)
     assert result.humid_hours_level in (*config.RISK_LEVELS, de.UNKNOWN)
     assert result.level == "HIGH" and result.method == "hutton"
+
+
+# --------------------------------------------------------------------------
+# Coverage affects the humid-hours measure ASYMMETRICALLY
+# --------------------------------------------------------------------------
+
+def test_positive_humid_count_stands_despite_poor_coverage():
+    """Observing 6 humid hours proves 6 happened, however many we missed."""
+    df = make_day("2025-10-01", humid_hours=6, min_temp=15.0,
+                  drop_hours=list(range(10, 24)))
+    level, hours, reasons = de.humid_hours_risk(df)
+    assert hours == 6.0
+    assert level == "HIGH", "a proven count must not be downgraded by gaps"
+
+
+def test_low_verdict_requires_real_coverage():
+    """Zero humid hours in 8 of 24 proves nothing about the other 16.
+
+    LOW is the only verdict that tells a farmer to relax, so it must not be
+    issued from a mostly-unobserved window - an overnight spell hides exactly
+    there.
+    """
+    df = make_day("2025-10-01", humid_hours=0, min_temp=15.0,
+                  drop_hours=list(range(8, 24)))
+    level, hours, reasons = de.humid_hours_risk(df)
+    assert hours == 0.0
+    assert level == de.UNKNOWN
+    assert any("Too little to call it safe" in r for r in reasons)
+
+
+def test_low_verdict_allowed_with_good_coverage():
+    df = make_day("2025-10-01", humid_hours=0, min_temp=15.0,
+                  drop_hours=list(range(22, 24)))
+    level, _, _ = de.humid_hours_risk(df)
+    assert level == "LOW"
+
+
+def test_rolling_window_selects_by_time_not_row_count():
+    """A gap must not let stale readings pose as 'the last 24 hours'.
+
+    Day 1 is humid, then a four-day gap, then a dry day. Selecting the last 24
+    ROWS would reach back into day 1 and report its humid hours as current.
+    """
+    df = make_days([
+        {"day": "2025-10-01", "humid_hours": 12, "min_temp": 15.0},
+        {"day": "2025-10-06", "humid_hours": 0, "min_temp": 15.0},
+    ])
+    level, hours, _ = de.humid_hours_risk(df)
+    assert hours == 0.0, "humid hours from five days ago must not leak in"
+    assert level == "LOW"
+
+
+def test_insufficient_data_produces_an_unknown_assessment():
+    """End to end: a mostly-missing day must not report a confident LOW."""
+    df = make_days([
+        {"day": "2025-10-01", "humid_hours": 0, "min_temp": 15.0,
+         "drop_hours": list(range(8, 24))},
+    ])
+    result = de.assess(df)
+    assert result.level == de.UNKNOWN
+    assert result.is_actionable is False
