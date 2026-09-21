@@ -8,7 +8,6 @@ off-by-one here means a farmer is not warned on the day it matters.
 from __future__ import annotations
 
 import sys
-from datetime import date
 from pathlib import Path
 
 import pandas as pd

@@ -29,7 +29,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import requests
 
@@ -155,18 +154,6 @@ def compare(merged: pd.DataFrame) -> None:
     print("  line up and the seasonal totals are the same order of magnitude.")
     print("  Nothing here is fed back into our data; this is a credibility")
     print("  check, not a calibration.")
-
-
-def compare_rg1(df_raw_total: float, derived_total: float) -> None:
-    print()
-    print(SUB)
-    print("  FOR CONTRAST: the per-interval field rg1")
-    print(SUB)
-    print(f"  rg1 total over the same period    : {df_raw_total:8.1f} mm")
-    print(f"  rg1tt-derived total (what we use) : {derived_total:8.1f} mm")
-    if derived_total:
-        print(f"  rg1 captures                      : "
-              f"{100 * df_raw_total / derived_total:8.1f}% of it")
 
 
 def main() -> int:

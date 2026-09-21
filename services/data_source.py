@@ -20,8 +20,6 @@ data even when the station is unreachable, so it is reported independently.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, timedelta
-from pathlib import Path
 
 import numpy as np
 import pandas as pd

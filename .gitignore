@@ -23,4 +23,9 @@ Thumbs.db
 # offline, provided it stays under ~50 MB. If it grows past that, add it here.
 data/raw/
 data/cache/
+# Ad-hoc API probe dumps from analysis/test_conduit_live.py - scratch output,
+# regenerated on demand. The COMBINED history and the two evidence artefacts
+# (backtest_ond2025.csv, rain_validation.csv) ARE committed so a judge can
+# inspect the numbers without running anything.
+data/conduit_probe_*.json
 *.tmp

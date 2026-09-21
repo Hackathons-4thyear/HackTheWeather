@@ -29,7 +29,6 @@ from dataclasses import dataclass, field
 from datetime import date as Date
 from typing import Protocol, runtime_checkable
 
-import numpy as np
 import pandas as pd
 
 import config

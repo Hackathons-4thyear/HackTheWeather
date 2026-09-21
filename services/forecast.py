@@ -147,25 +147,6 @@ def fetch_forecast(
     return result
 
 
-def upcoming(df: pd.DataFrame, *, hours: int | None = None,
-             now: pd.Timestamp | None = None) -> pd.DataFrame:
-    """Trim a forecast frame to the next `hours` hours from `now`.
-
-    Open-Meteo returns the whole of today including hours already past, which
-    would otherwise let us recommend a spray window that has already gone by.
-    """
-    if df.empty or "timestamp" not in df.columns:
-        return df
-    hours = config.SPRAY_LOOKAHEAD_HOURS if hours is None else hours
-    now = pd.Timestamp.now() if now is None else now
-
-    # Round down to the current hour so the hour we are inside still counts.
-    start = now.floor("h")
-    end = start + pd.Timedelta(hours=hours)
-    mask = (df["timestamp"] >= start) & (df["timestamp"] < end)
-    return df[mask].reset_index(drop=True)
-
-
 def daily_outlook(df: pd.DataFrame) -> pd.DataFrame:
     """Collapse the hourly forecast into the per-day summary the UI shows."""
     if df.empty or "timestamp" not in df.columns:
