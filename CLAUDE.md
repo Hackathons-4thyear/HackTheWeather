@@ -56,6 +56,36 @@ Conduit station data (+ free forecast) -> disease-risk & spray-window engine
   (lat -1.0914, lon 37.0147): temperature, relative humidity, precipitation,
   wind speed.
 
+## Design decisions made in build
+
+**How the two risk measures combine** (decided while building `disease_engine.py`):
+
+- **Hutton is authoritative whenever it can be computed**, and **HIGH is reserved
+  for the official trigger** - two consecutive Hutton days. If Shamba Pulse says
+  HIGH, the Hutton criteria fired. No exceptions.
+- **Humid hours is a fallback, not a competing score.** It (a) answers when
+  Hutton cannot (partial day, or too many gaps), and (b) escalates LOW to
+  MODERATE when humidity has been sitting at 90%+ without a completed Hutton
+  day, so a building spell is not ignored.
+- **Humid hours can never by itself produce HIGH.** Six humid hours in a rolling
+  day is not the same evidence as two consecutive qualifying days.
+
+The first version took the max of the two measures. That produced a HIGH headline
+sitting above Hutton reasoning that said "one more day triggers a HIGH-risk
+warning" - self-contradictory, and it diluted the Hutton claim. Locked in by
+tests in `tests/test_disease_engine.py`.
+
+**Data-gap honesty:** a day missing more than 25% of its hours
+(`disease_engine.MAX_MISSING_FRACTION`) is marked "insufficient data" and
+**breaks a consecutive-Hutton run** rather than being bridged. A missing night is
+exactly when the humid hours would have happened, so guessing biases toward false
+confidence.
+
+**Open question - overnight spray windows:** window detection is physically
+correct but can return e.g. "Mon 19:00 - Tue 08:00", implying a 3am spray.
+Ranking already de-prioritises it via `SPRAY_PREFERRED_HOURS`. Not yet decided
+whether to hard-limit windows to daylight.
+
 ## Hard rules
 
 - **Real Conduit data must be visibly used — 25% of the judging score.**
