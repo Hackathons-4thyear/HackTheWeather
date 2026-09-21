@@ -443,6 +443,18 @@ def render_backtest(results: pd.DataFrame) -> None:
                        "%{customdata[1]:.0f} humid hours<br>"
                        "Hutton run: %{customdata[2]} days<extra></extra>"),
     ))
+    # Mark the KMD advisory window, when our data covers it.
+    adv_start = pd.Timestamp(config.KMD_ADVISORY["start"])
+    adv_end = pd.Timestamp(config.KMD_ADVISORY["end"])
+    dates = pd.to_datetime(results["date"])
+    if dates.min() <= adv_end and dates.max() >= adv_start:
+        fig.add_vrect(
+            x0=adv_start, x1=adv_end,
+            fillcolor="#1565c0", opacity=0.13, line_width=0, layer="below",
+            annotation_text="KMD advisory", annotation_position="top left",
+            annotation_font=dict(size=10, color="#1565c0"),
+        )
+
     sent = results[results["would_send"]]
     if len(sent):
         fig.add_trace(go.Scatter(
@@ -460,6 +472,19 @@ def render_backtest(results: pd.DataFrame) -> None:
         plot_bgcolor="#fbfcfd", bargap=0.05,
     )
     st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
+
+    if dates.min() <= adv_end and dates.max() >= adv_start:
+        st.caption(
+            f"The shaded band is the **{config.KMD_ADVISORY['label']}** "
+            f"({config.KMD_ADVISORY['start']} to {config.KMD_ADVISORY['end']}), "
+            f"which the department expected to mark the onset of the short "
+            f"rains. Our engine flagged HIGH risk on 29 Oct - 1 Nov from "
+            f"station humidity and temperature alone, with no knowledge of the "
+            f"advisory. It corroborates that the weather was genuinely unusual "
+            f"in that window - it is **not** evidence that blight occurred, "
+            f"since no one surveyed the fields. "
+            f"[Source]({config.KMD_ADVISORY['source']})"
+        )
 
     st.markdown("**Messages that would have gone out**")
     if sent.empty:

@@ -43,13 +43,38 @@ STATION_INTERVAL_MINUTES = 15
 # Credentials (from .env only - see .env.example)
 # --------------------------------------------------------------------------
 
-CONDUIT_API_KEY = os.getenv("CONDUIT_API_KEY", "")
-CONDUIT_EMAIL = os.getenv("CONDUIT_EMAIL", "")
-AT_USERNAME = os.getenv("AT_USERNAME", "sandbox")
-AT_API_KEY = os.getenv("AT_API_KEY", "")
+def _secret(name: str, default: str = "") -> str:
+    """Read a credential from the environment, then from Streamlit secrets.
+
+    Locally, .env supplies these. On Streamlit Community Cloud there is no .env
+    file - secrets live in st.secrets, entered through the app's settings page.
+    Environment wins, so a local .env can override a deployed secret during
+    debugging.
+
+    Streamlit is imported lazily and defensively: config.py is imported by the
+    CLI scripts too (fetch_history, backtest, ...), which must not require
+    streamlit to be installed or a script context to exist.
+    """
+    value = os.getenv(name)
+    if value:
+        return value
+
+    try:
+        import streamlit as st  # noqa: PLC0415 - deliberately lazy
+
+        # Accessing st.secrets with no secrets.toml raises; treat that as absent.
+        return str(st.secrets[name])
+    except Exception:  # noqa: BLE001 - any failure just means "not set there"
+        return default
+
+
+CONDUIT_API_KEY = _secret("CONDUIT_API_KEY")
+CONDUIT_EMAIL = _secret("CONDUIT_EMAIL")
+AT_USERNAME = _secret("AT_USERNAME", "sandbox")
+AT_API_KEY = _secret("AT_API_KEY")
 
 # Default to dry-run so a misconfigured demo never sends real SMS by accident.
-SMS_DRY_RUN = os.getenv("SMS_DRY_RUN", "true").strip().lower() in {"1", "true", "yes"}
+SMS_DRY_RUN = _secret("SMS_DRY_RUN", "true").strip().lower() in {"1", "true", "yes"}
 
 # --------------------------------------------------------------------------
 # APIs
@@ -188,6 +213,25 @@ SMS_COOLDOWN_OVERRIDE_LEVEL = "HIGH"
 
 # Risk levels, ordered low -> high. Used for sorting and colour-coding.
 RISK_LEVELS = ("LOW", "MODERATE", "HIGH")
+
+# --------------------------------------------------------------------------
+# External corroboration
+# --------------------------------------------------------------------------
+# The Kenya Meteorological Department issued a heavy-rainfall advisory for
+# 23-30 October 2025 naming Kiambu among the affected counties, and expected it
+# to mark the onset of the short rains.
+#
+# Our engine independently flagged HIGH blight risk on 2025-10-29 to 11-01 from
+# station humidity and temperature alone. The advisory is shown on the backtest
+# timeline as CONTEXT: it corroborates that the weather was genuinely unusual
+# in that window. It is NOT evidence that blight occurred - nobody surveyed the
+# fields - and must never be presented as validation of the disease model.
+KMD_ADVISORY = {
+    "start": "2025-10-23",
+    "end": "2025-10-30",
+    "label": "KMD heavy-rainfall advisory (Kiambu named)",
+    "source": "https://allafrica.com/stories/202510230054.html",
+}
 
 RISK_COLORS = {
     "LOW": "#2e7d32",       # green
