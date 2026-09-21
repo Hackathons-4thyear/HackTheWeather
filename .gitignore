@@ -1,0 +1,25 @@
+# Secrets - never commit
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Data artefacts
+# data/raw/ is the per-chunk API download cache: large, re-downloadable, and
+# pure noise in a diff. The COMBINED history (data/conduit_history.parquet|csv)
+# is deliberately NOT ignored - it is committed so the deployed app works
+# offline, provided it stays under ~50 MB. If it grows past that, add it here.
+data/raw/
+data/cache/
+*.tmp

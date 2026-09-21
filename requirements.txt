@@ -1,0 +1,10 @@
+# Shamba Pulse - minimal dependency set
+pandas>=2.2
+numpy>=1.26
+requests>=2.31
+python-dotenv>=1.0
+streamlit>=1.37
+plotly>=5.22
+openpyxl>=3.1
+pyarrow>=15.0      # parquet writer for the combined history cache
+pytest>=8.0
